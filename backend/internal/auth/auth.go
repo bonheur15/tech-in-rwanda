@@ -293,7 +293,14 @@ func SetSessionCookie(w http.ResponseWriter, kind, token, csrf string, secure bo
 		age = 30 * 24 * 3600
 	}
 	csrfName := "__Host-rfs_csrf"
-	if !secure { if kind=="reader" { name="rfs_reader_session" } else { name="rfs_staff_session" }; csrfName="rfs_csrf" }
+	if !secure {
+		if kind == "reader" {
+			name = "rfs_reader_session"
+		} else {
+			name = "rfs_staff_session"
+		}
+		csrfName = "rfs_csrf"
+	}
 	http.SetCookie(w, &http.Cookie{Name: name, Value: token, Path: "/", MaxAge: age, Secure: secure, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	http.SetCookie(w, &http.Cookie{Name: csrfName, Value: csrf, Path: "/", MaxAge: age, Secure: secure, HttpOnly: false, SameSite: http.SameSiteLaxMode})
 }

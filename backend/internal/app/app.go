@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
 	"time"
 
@@ -52,11 +52,8 @@ func staticSite(directory string) http.Handler {
 	root := http.Dir(directory)
 	files := http.FileServer(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cleanPath := filepath.Clean("/" + r.URL.Path)
+		cleanPath := path.Clean("/" + r.URL.Path)
 		name := strings.TrimPrefix(cleanPath, "/")
-		if name == "." || name == "" || strings.HasSuffix(r.URL.Path, "/") {
-			name = filepath.Join(name, "index.html")
-		}
 
 		file, err := root.Open(name)
 		if err != nil {
@@ -65,9 +62,22 @@ func staticSite(directory string) http.Handler {
 		}
 		info, statErr := file.Stat()
 		_ = file.Close()
-		if statErr != nil || info.IsDir() {
+		if statErr != nil {
 			http.NotFound(w, r)
 			return
+		}
+		if info.IsDir() {
+			index, indexErr := root.Open(path.Join(name, "index.html"))
+			if indexErr != nil {
+				http.NotFound(w, r)
+				return
+			}
+			indexInfo, indexStatErr := index.Stat()
+			_ = index.Close()
+			if indexStatErr != nil || indexInfo.IsDir() {
+				http.NotFound(w, r)
+				return
+			}
 		}
 
 		if strings.HasPrefix(r.URL.Path, "/_astro/") {

@@ -1,6 +1,8 @@
 node_modules/
+.astro/
 dist/
 bin/
+/api
 coverage/
 .env
 .env.*

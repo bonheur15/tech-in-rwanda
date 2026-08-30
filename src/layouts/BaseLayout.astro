@@ -1,7 +1,7 @@
 ---
-import SiteHeader from "../components/SiteHeader.astro";
-import SiteFooter from "../components/SiteFooter.astro";
-import "../styles/global.css";
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
@@ -10,13 +10,12 @@ interface Props {
 }
 const {
   title,
-  description = "Independent, constructive criticism of technology in Rwanda.",
-  image = "/default-thumbnail.svg",
+  description = 'Independent, constructive criticism of technology in Rwanda.',
+  image = '/default-thumbnail.svg',
   canonical,
 } = Astro.props;
 const canonicalURL =
-  canonical ??
-  new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).toString();
+  canonical ?? new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).toString();
 ---
 
 <!doctype html>

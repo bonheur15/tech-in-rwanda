@@ -1,45 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-
-project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$project_dir"
-
-port="${SMOKE_PORT:-18080}"
-log_file="$(mktemp)"
-
-cleanup() {
-  trap - EXIT INT TERM
-  if [[ -n "${server_pid:-}" ]] && kill -0 "$server_pid" 2>/dev/null; then
-    kill "$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
-  fi
-  rm -f "$log_file"
-}
-trap 'status=$?; cleanup; exit "$status"' EXIT INT TERM
-
-APP_ADDR="127.0.0.1:$port" STATIC_DIR=dist ./bin/rwanda-free-space >"$log_file" 2>&1 &
-server_pid=$!
-
-for _ in {1..40}; do
-  if curl -fsS "http://127.0.0.1:$port/api/v1/healthz" >/dev/null; then
-    break
-  fi
-  if ! kill -0 "$server_pid" 2>/dev/null; then
-    cat "$log_file"
-    exit 1
-  fi
-  sleep 0.1
-done
-
-curl -fsS "http://127.0.0.1:$port/" | grep -q "Rwanda Free Space"
-curl -fsS "http://127.0.0.1:$port/server-time/" | grep -q "Go API client test"
-first_time="$(curl -fsS "http://127.0.0.1:$port/api/v1/server-time" | sed -n 's/.*"iso":"\([^"]*\)".*/\1/p')"
-sleep 0.05
-second_time="$(curl -fsS "http://127.0.0.1:$port/api/v1/server-time" | sed -n 's/.*"iso":"\([^"]*\)".*/\1/p')"
-
-if [[ -z "$first_time" || -z "$second_time" || "$first_time" == "$second_time" ]]; then
-  echo "server-time endpoint did not produce two fresh timestamps" >&2
-  exit 1
-fi
-
-echo "Smoke test passed: static pages and fresh Go API responses are available on port $port."
+project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)";cd "$project_dir";tmp_dir="$(mktemp -d)";api_log="$tmp_dir/api.log";web_log="$tmp_dir/web.log"
+cleanup(){trap - EXIT INT TERM;kill "${api_pid:-}" "${web_pid:-}" 2>/dev/null||true;wait "${api_pid:-}" "${web_pid:-}" 2>/dev/null||true;rm -rf "$tmp_dir";};trap 'status=$?;cleanup;exit "$status"' EXIT INT TERM
+APP_ADDR=127.0.0.1:18081 DATABASE_PATH="$tmp_dir/blog.sqlite3" MEDIA_DIR="$tmp_dir/media" UPLOAD_TEMP_DIR="$tmp_dir/uploads" ./bin/rfs-api >"$api_log" 2>&1 & api_pid=$!
+HOST=127.0.0.1 PORT=18080 INTERNAL_API_URL=http://127.0.0.1:18081 node dist/server/entry.mjs >"$web_log" 2>&1 & web_pid=$!
+for _ in {1..80};do if curl -fsS http://127.0.0.1:18080/api/v1/healthz >/dev/null;then break;fi;sleep .1;done
+curl -fsS http://127.0.0.1:18080/ | grep -q "Rwanda Free Space"
+curl -fsS http://127.0.0.1:18080/robots.txt | grep -q "Disallow: /workspace/"
+kill -0 "$api_pid";kill -0 "$web_pid";echo "SSR plus Go API smoke test passed."

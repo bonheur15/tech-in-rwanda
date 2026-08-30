@@ -1,41 +1,54 @@
 # Rwanda Free Space
 
-An Astro and Tailwind editorial frontend backed by a small Go API. Development uses two processes for fast frontend refreshes. Production uses one non-root container where Go serves both the API and Astro's compiled static files.
+Rwanda Free Space is a same-origin publishing platform for constructive criticism of technology in Rwanda. Astro SSR owns public rendering and the React/TipTap writing workspace. Go owns authentication, authorization, editorial state, media, comments, persistence, and operational tooling.
 
-## Architecture
+There are deliberately no passwords, JWTs, analytics libraries, page-view records, or reader-behavior tracking.
 
-- `src/`: static Astro frontend and generated TypeScript API client.
-- `backend/internal/features/`: API features grouped with their contracts and handlers.
-- `backend/internal/platform/`: configuration, request metadata, and HTTP infrastructure.
-- `backend/cmd/gen-client/`: generator that turns the Go contract into `src/lib/api/generated.ts`.
-- `backend/cmd/api/`: production API entrypoint with graceful shutdown and a container healthcheck command.
-
-The public API starts at `/api/v1`. The demonstration endpoint is `GET /api/v1/server-time`; liveness is `GET /api/v1/healthz`.
-
-## Development
-
-Install the frontend dependencies once, then start both servers:
+## Local development
 
 ```sh
 npm install
+cp .env.example .env
+make bootstrap-superadmin EMAIL=editor@example.com HANDLE=editor NAME="First Editor"
 make dev
 ```
 
-Open `http://127.0.0.1:4321/server-time/`. Astro runs on port 4321 and Go runs on port 8787. Stopping `make dev` stops both processes.
+Open `http://127.0.0.1:4321/` for the publication and `/workspace/` for staff. Development OTP codes are printed only by the Go terminal mailer. The terminal sender is rejected when `APP_ENV=production`.
 
-When a Go API contract changes, regenerate the browser client:
+`make dev` starts Astro on 4321 and Go on 8787 with coordinated shutdown. Astro proxies `/api/*` and `/media/*`, so browsers always use a same-origin API. Local data lives under `.data/`.
+
+## Data and security model
+
+- SQLite enables WAL, foreign keys, a five-second busy timeout, bounded connections, and embedded forward-only migrations.
+- Staff and reader tokens are opaque. Only HMAC-SHA256 digests are stored.
+- Production requires HTTPS, secure `__Host-` cookies, SMTP, real Turnstile credentials, and independent 32-character or longer session and OTP peppers.
+- Reader Turnstile tokens are verified server-side and are never trusted from client state.
+- Published pages read immutable versions through `published_version_id`; autosave can never alter the live article.
+- Uploads accept decoded JPEG/PNG only, enforce 15 MiB and 30 MP limits, strip metadata by re-encoding, and create four responsive derivatives.
+
+Run `make check` for generated-client drift, formatting, vet, race tests, frontend tests, Astro checks, and production builds. Run `make smoke` for the compiled two-process topology.
+
+## Operations
 
 ```sh
-make generate
+make migrate-status
+make backup FILE=rfs-backup.tar.gz
+make verify-backup FILE=rfs-backup.tar.gz
+go run ./backend/cmd/blogctl media-check
+go run ./backend/cmd/blogctl recover-account editor@example.com
 ```
 
-Run the full verification gate with `make check`, or build and smoke-test the production topology with `make smoke`.
+Backups use SQLite `VACUUM INTO` for a consistent snapshot and include a SHA-256 media manifest. Keep backup archives outside the application volume.
 
 ## Docker
 
+The production image runs as UID 10001. `tini` starts a signal-aware supervisor, Go listens only on `127.0.0.1:8081`, and Astro is the sole public listener on `:8080`. The health check crosses Astro's proxy and verifies the Go database connection.
+
 ```sh
+cp .env.example .env
+# Set APP_ENV=production, PUBLIC_ORIGIN, SMTP values, real Turnstile keys, and strong peppers.
 make docker-build
 make docker-run
 ```
 
-Then open `http://localhost:8080/server-time/`. The multi-stage image builds Astro with Node, compiles a static Go binary, and copies only the binary and built site into a distroless non-root runtime image.
+Mount one persistent volume at `/data`. This SQLite and local-media topology supports exactly one active application container.

@@ -1,6 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 
-const internalOrigin = import.meta.env.INTERNAL_API_URL ?? "http://127.0.0.1:8081";
+const internalOrigin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? "http://127.0.0.1:8081";
 
 export const onRequest = defineMiddleware(async (context, next) => {
   if (!context.url.pathname.startsWith("/api/") && !context.url.pathname.startsWith("/media/")) return next();

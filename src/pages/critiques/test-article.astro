@@ -6,30 +6,41 @@ import "../../styles/global.css";
 const findings = [
   {
     title: "The form hides its requirements",
-    problem: "Required documents and accepted formats appear only after an upload fails.",
+    problem:
+      "Required documents and accepted formats appear only after an upload fails.",
     fix: "Show requirements before the visitor starts.",
   },
   {
     title: "Errors arrive without a recovery path",
-    problem: "A red border signals a problem but does not explain what changed or how to continue.",
+    problem:
+      "A red border signals a problem but does not explain what changed or how to continue.",
     fix: "Name the error and place guidance beside the field.",
   },
   {
     title: "Progress is invisible",
-    problem: "Visitors cannot tell how much work remains or whether they can return later.",
+    problem:
+      "Visitors cannot tell how much work remains or whether they can return later.",
     fix: "Show scope, progress, and save behavior from the start.",
   },
 ];
 
 const repairs = [
   ["Before starting", "Explain the outcome, documents, time, and cost."],
-  ["While completing", "Use familiar labels, useful defaults, and visible progress."],
+  [
+    "While completing",
+    "Use familiar labels, useful defaults, and visible progress.",
+  ],
   ["When errors happen", "Preserve input and explain exactly how to recover."],
-  ["After submission", "Confirm what happened and what the visitor should expect next."],
+  [
+    "After submission",
+    "Confirm what happened and what the visitor should expect next.",
+  ],
 ];
 
-const sectionNumber = "m-0 mb-2 font-sans text-[0.68rem] font-bold tracking-[0.12em] text-accent";
-const sectionHeading = "mb-6 font-display text-[clamp(2.35rem,4vw,3.7rem)] leading-[1.05] font-medium tracking-[-0.04em]";
+const sectionNumber =
+  "m-0 mb-2 font-sans text-[0.68rem] font-bold tracking-[0.12em] text-accent";
+const sectionHeading =
+  "mb-6 font-display text-[clamp(2.35rem,4vw,3.7rem)] leading-[1.05] font-medium tracking-[-0.04em]";
 const bodyParagraph = "mb-5 text-pretty";
 ---
 
@@ -43,47 +54,109 @@ const bodyParagraph = "mb-5 text-pretty";
       content="A demonstration critique showing how a confusing online form can be made clearer, more accessible, and easier to complete."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>What a broken form teaches us about usable design | Rwanda Free Space</title>
+    <title>
+      What a broken form teaches us about usable design | Rwanda Free Space
+    </title>
   </head>
   <body>
-    <a class="fixed top-3 left-3 z-50 -translate-y-[160%] bg-ink px-4 py-2.5 text-canvas focus:translate-y-0" href="#article-content">Skip to article</a>
+    <a
+      class="fixed top-3 left-3 z-50 -translate-y-[160%] bg-ink px-4 py-2.5 text-canvas focus:translate-y-0"
+      href="#article-content">Skip to article</a
+    >
     <SiteHeader />
 
-    <main class="mx-auto w-full max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] max-sm:px-0" id="article-content">
-      <header class="mx-auto max-w-[76rem] py-[clamp(2.5rem,5vw,4.5rem)] pb-[clamp(3.5rem,6vw,5rem)] max-md:pt-12 max-sm:px-[clamp(1.25rem,4vw,4.5rem)]">
-        <a class="mb-[clamp(2.5rem,4vw,3.75rem)] inline-flex items-center gap-2 text-[0.78rem] font-bold text-muted no-underline hover:text-accent" href="/#stories">
-          <svg class="size-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8H3m4-4L3 8l4 4" /></svg>
+    <main
+      class="mx-auto w-full max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] max-sm:px-0"
+      id="article-content"
+    >
+      <header
+        class="mx-auto max-w-[76rem] py-[clamp(2.5rem,5vw,4.5rem)] pb-[clamp(3.5rem,6vw,5rem)] max-md:pt-12 max-sm:px-[clamp(1.25rem,4vw,4.5rem)]"
+      >
+        <a
+          class="mb-[clamp(2.5rem,4vw,3.75rem)] inline-flex items-center gap-2 text-[0.78rem] font-bold text-muted no-underline hover:text-accent"
+          href="/#stories"
+        >
+          <svg
+            class="size-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round]"
+            viewBox="0 0 16 16"
+            aria-hidden="true"><path d="M13 8H3m4-4L3 8l4 4"></path></svg
+          >
           All critiques
         </a>
 
-        <div class="grid grid-cols-[minmax(0,1.25fr)_minmax(18rem,.75fr)] items-end gap-[clamp(3rem,7vw,7rem)] max-md:grid-cols-1 max-md:gap-10">
+        <div
+          class="grid grid-cols-[minmax(0,1.25fr)_minmax(18rem,.75fr)] items-end gap-[clamp(3rem,7vw,7rem)] max-md:grid-cols-1 max-md:gap-10"
+        >
           <div>
-            <p class="m-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] text-accent">Demonstration critique · UX teardown</p>
-            <h1 class="m-0 max-w-[15ch] font-display text-[clamp(3.5rem,4.8vw,5.35rem)] leading-[.98] font-medium tracking-[-0.05em] text-pretty max-md:text-[clamp(3rem,8vw,4.25rem)] max-sm:text-[clamp(2.65rem,11vw,3.45rem)]">What a broken public-service form teaches us about usable design</h1>
+            <p
+              class="m-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] text-accent"
+            >
+              Demonstration critique · UX teardown
+            </p>
+            <h1
+              class="m-0 max-w-[15ch] font-display text-[clamp(3.5rem,4.8vw,5.35rem)] leading-[.98] font-medium tracking-[-0.05em] text-pretty max-md:text-[clamp(3rem,8vw,4.25rem)] max-sm:text-[clamp(2.65rem,11vw,3.45rem)]"
+            >
+              What a broken public-service form teaches us about usable design
+            </h1>
           </div>
 
-          <div class="border-t-[3px] border-accent pt-6 max-md:grid max-md:grid-cols-[1.2fr_.8fr] max-md:gap-8 max-sm:block">
-            <p class="m-0 mb-8 max-w-[31rem] text-[clamp(1.02rem,1.35vw,1.18rem)] leading-[1.65] text-muted text-pretty max-md:mb-0 max-sm:mb-8">
-              A form can technically work and still fail the people using it. This test article examines
-              five common points of friction and turns each one into a practical design improvement.
+          <div
+            class="border-t-[3px] border-accent pt-6 max-md:grid max-md:grid-cols-[1.2fr_.8fr] max-md:gap-8 max-sm:block"
+          >
+            <p
+              class="m-0 mb-8 max-w-[31rem] text-[clamp(1.02rem,1.35vw,1.18rem)] leading-[1.65] text-muted text-pretty max-md:mb-0 max-sm:mb-8"
+            >
+              A form can technically work and still fail the people using it.
+              This test article examines five common points of friction and
+              turns each one into a practical design improvement.
             </p>
-            <div class="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-5 max-md:border-0 max-md:pt-0 max-sm:border-t max-sm:pt-5">
-              <p class="col-span-2 m-0 text-xs font-semibold"><span class="mb-0.5 block text-[0.65rem] font-semibold tracking-[0.08em] text-muted uppercase">Written by</span> Rwanda Free Space</p>
-              <p class="m-0 text-xs font-semibold"><span class="mb-0.5 block text-[0.65rem] font-semibold tracking-[0.08em] text-muted uppercase">Published</span> <time datetime="2026-08-30">30 August 2026</time></p>
-              <p class="m-0 text-xs font-semibold"><span class="mb-0.5 block text-[0.65rem] font-semibold tracking-[0.08em] text-muted uppercase">Reading time</span> 8 minutes</p>
+            <div
+              class="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-5 max-md:border-0 max-md:pt-0 max-sm:border-t max-sm:pt-5"
+            >
+              <p class="col-span-2 m-0 text-xs font-semibold">
+                <span
+                  class="mb-0.5 block text-[0.65rem] font-semibold tracking-[0.08em] text-muted uppercase"
+                  >Written by</span
+                > Rwanda Free Space
+              </p>
+              <p class="m-0 text-xs font-semibold">
+                <span
+                  class="mb-0.5 block text-[0.65rem] font-semibold tracking-[0.08em] text-muted uppercase"
+                  >Published</span
+                >
+                <time datetime="2026-08-30">30 August 2026</time>
+              </p>
+              <p class="m-0 text-xs font-semibold">
+                <span
+                  class="mb-0.5 block text-[0.65rem] font-semibold tracking-[0.08em] text-muted uppercase"
+                  >Reading time</span
+                > 8 minutes
+              </p>
             </div>
           </div>
         </div>
       </header>
 
       <figure class="mx-auto mb-[clamp(4rem,8vw,7rem)] max-w-[76rem]">
-        <div class="relative grid min-h-[clamp(25rem,48vw,38rem)] place-items-center overflow-hidden bg-accent max-sm:min-h-[25rem]" aria-hidden="true">
-          <span class="pointer-events-none absolute inset-0 bg-[radial-gradient(rgba(255,255,255,.16)_0.7px,transparent_0.7px)] bg-[length:5px_5px] opacity-30"></span>
-          <div class="absolute inset-x-0 top-0 flex gap-2 border-b border-white/35 p-4">
-            <span class="size-2 rounded-full border border-[#fffaf4]"></span><span class="size-2 rounded-full border border-[#fffaf4]"></span><span class="size-2 rounded-full border border-[#fffaf4]"></span>
+        <div
+          class="relative grid min-h-[clamp(25rem,48vw,38rem)] place-items-center overflow-hidden bg-accent max-sm:min-h-[25rem]"
+          aria-hidden="true"
+        >
+          <span
+            class="pointer-events-none absolute inset-0 bg-[radial-gradient(rgba(255,255,255,.16)_0.7px,transparent_0.7px)] bg-[length:5px_5px] opacity-30"
+          ></span>
+          <div
+            class="absolute inset-x-0 top-0 flex gap-2 border-b border-white/35 p-4"
+          >
+            <span class="size-2 rounded-full border border-[#fffaf4]"
+            ></span><span class="size-2 rounded-full border border-[#fffaf4]"
+            ></span><span class="size-2 rounded-full border border-[#fffaf4]"
+            ></span>
           </div>
 
-          <div class="relative z-10 flex w-[min(78%,36rem)] flex-col bg-canvas p-[clamp(2rem,5vw,4rem)] shadow-[1.1rem_1.1rem_0_#17221d] max-sm:w-[78%] max-sm:px-6 max-sm:py-8 max-sm:shadow-[.65rem_.65rem_0_#17221d]">
+          <div
+            class="relative z-10 flex w-[min(78%,36rem)] flex-col bg-canvas p-[clamp(2rem,5vw,4rem)] shadow-[1.1rem_1.1rem_0_#17221d] max-sm:w-[78%] max-sm:px-6 max-sm:py-8 max-sm:shadow-[.65rem_.65rem_0_#17221d]"
+          >
             <span class="mb-4 block h-5 w-[58%] bg-ink"></span>
             <span class="mb-8 block h-2 w-[78%] bg-line"></span>
             <span class="mb-5 block h-14 w-full border-2 border-accent"></span>
@@ -92,93 +165,214 @@ const bodyParagraph = "mb-5 text-pretty";
             <span class="mt-2 block h-11 w-[36%] bg-ink"></span>
           </div>
 
-          <span class="absolute top-1/4 left-[17%] z-20 grid size-11 place-items-center rounded-full border-2 border-ink bg-[#fffaf4] font-display text-xl font-bold max-sm:size-9 max-sm:text-base">1</span>
-          <span class="absolute top-[48%] right-[16%] z-20 grid size-11 place-items-center rounded-full border-2 border-ink bg-[#fffaf4] font-display text-xl font-bold max-sm:size-9 max-sm:text-base">2</span>
-          <span class="absolute bottom-[16%] left-[21%] z-20 grid size-11 place-items-center rounded-full border-2 border-ink bg-[#fffaf4] font-display text-xl font-bold max-sm:size-9 max-sm:text-base">3</span>
+          <span
+            class="absolute top-1/4 left-[17%] z-20 grid size-11 place-items-center rounded-full border-2 border-ink bg-[#fffaf4] font-display text-xl font-bold max-sm:size-9 max-sm:text-base"
+            >1</span
+          >
+          <span
+            class="absolute top-[48%] right-[16%] z-20 grid size-11 place-items-center rounded-full border-2 border-ink bg-[#fffaf4] font-display text-xl font-bold max-sm:size-9 max-sm:text-base"
+            >2</span
+          >
+          <span
+            class="absolute bottom-[16%] left-[21%] z-20 grid size-11 place-items-center rounded-full border-2 border-ink bg-[#fffaf4] font-display text-xl font-bold max-sm:size-9 max-sm:text-base"
+            >3</span
+          >
         </div>
-        <figcaption class="mt-3 text-xs text-muted">A representative form used to demonstrate recurring interface problems.</figcaption>
+        <figcaption class="mt-3 text-xs text-muted">
+          A representative form used to demonstrate recurring interface
+          problems.
+        </figcaption>
       </figure>
 
-      <div class="grid grid-cols-[15rem_minmax(0,45rem)] justify-center gap-[clamp(3rem,8vw,8rem)] pb-[clamp(5rem,10vw,9rem)] max-md:grid-cols-1 max-md:gap-14 max-sm:px-[clamp(1.25rem,4vw,4.5rem)]">
-        <aside class="sticky top-8 self-start max-md:static" aria-label="Article summary">
-          <p class="m-0 mb-4 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-accent">In this critique</p>
-          <ol class="m-0 list-none border-t border-line p-0 [counter-reset:article-section] max-md:grid max-md:grid-cols-2 max-sm:grid-cols-1">
-            {[
-              ["problem", "The core problem"],
-              ["friction", "Where the form creates friction"],
-              ["repair", "A better approach"],
-              ["standard", "The wider standard"],
-            ].map(([anchor, label], index) => (
-              <li class:list={["border-b border-line", index % 2 === 0 && "max-md:border-r max-sm:border-r-0"]}>
-                <a class="grid grid-cols-[1.6rem_1fr] gap-2.5 py-3.5 text-xs leading-snug font-semibold no-underline hover:text-accent max-md:px-3" href={`#${anchor}`}>
-                  <span class="text-[0.62rem] text-muted">0{index + 1}</span>{label}
-                </a>
-              </li>
-            ))}
+      <div
+        class="grid grid-cols-[15rem_minmax(0,45rem)] justify-center gap-[clamp(3rem,8vw,8rem)] pb-[clamp(5rem,10vw,9rem)] max-md:grid-cols-1 max-md:gap-14 max-sm:px-[clamp(1.25rem,4vw,4.5rem)]"
+      >
+        <aside
+          class="sticky top-8 self-start max-md:static"
+          aria-label="Article summary"
+        >
+          <p
+            class="m-0 mb-4 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-accent"
+          >
+            In this critique
+          </p>
+          <ol
+            class="m-0 list-none border-t border-line p-0 [counter-reset:article-section] max-md:grid max-md:grid-cols-2 max-sm:grid-cols-1"
+          >
+            {
+              [
+                ["problem", "The core problem"],
+                ["friction", "Where the form creates friction"],
+                ["repair", "A better approach"],
+                ["standard", "The wider standard"],
+              ].map(([anchor, label], index) => (
+                <li
+                  class:list={[
+                    "border-b border-line",
+                    index % 2 === 0 && "max-md:border-r max-sm:border-r-0",
+                  ]}
+                >
+                  <a
+                    class="grid grid-cols-[1.6rem_1fr] gap-2.5 py-3.5 text-xs leading-snug font-semibold no-underline hover:text-accent max-md:px-3"
+                    href={`#${anchor}`}
+                  >
+                    <span class="text-[0.62rem] text-muted">0{index + 1}</span>
+                    {label}
+                  </a>
+                </li>
+              ))
+            }
           </ol>
-          <p class="mt-6 border-l-2 border-accent pl-4 text-xs leading-relaxed text-muted"><strong class="mb-1 block text-ink">Testing note</strong>This is representative sample content. It does not describe a named organization or live service.</p>
+          <p
+            class="mt-6 border-l-2 border-accent pl-4 text-xs leading-relaxed text-muted"
+          >
+            <strong class="mb-1 block text-ink">Testing note</strong>This is
+            representative sample content. It does not describe a named
+            organization or live service.
+          </p>
         </aside>
 
-        <article class="min-w-0 font-display text-[clamp(1.16rem,1.4vw,1.3rem)] leading-[1.78]">
-          <p class="m-0 mb-16 border-b border-line pb-10 text-[clamp(1.4rem,2.2vw,1.85rem)] leading-normal text-pretty">
-            The worst forms rarely look completely broken. They load. Their inputs accept text. A
-            button eventually sends something somewhere. The failure appears in the gap between
-            technical completion and human understanding.
+        <article
+          class="min-w-0 font-display text-[clamp(1.16rem,1.4vw,1.3rem)] leading-[1.78]"
+        >
+          <p
+            class="m-0 mb-16 border-b border-line pb-10 text-[clamp(1.4rem,2.2vw,1.85rem)] leading-normal text-pretty"
+          >
+            The worst forms rarely look completely broken. They load. Their
+            inputs accept text. A button eventually sends something somewhere.
+            The failure appears in the gap between technical completion and
+            human understanding.
           </p>
 
           <section class="scroll-mt-8" id="problem">
             <p class={sectionNumber}>01</p>
             <h2 class={sectionHeading}>The core problem</h2>
-            <p class={bodyParagraph}>People arrive at a public-service form with a specific goal. They may need a document, an appointment, or permission to continue an important process. The interface should reduce uncertainty. Too often it adds more.</p>
-            <p class={bodyParagraph}>A weak form asks for unfamiliar information without explaining why, marks errors only after submission, and clears useful work when something goes wrong. None of these failures is visually dramatic. Together, they make the service feel unreliable.</p>
-            <blockquote class="my-12 border-y border-l-4 border-y-line border-l-accent py-8 pl-[clamp(1.5rem,4vw,3rem)]">
-              <p class="m-0 max-w-[22ch] text-[clamp(1.9rem,4vw,3.2rem)] leading-[1.12] tracking-[-0.035em]">A working submit button is not the same as a usable service.</p>
+            <p class={bodyParagraph}>
+              People arrive at a public-service form with a specific goal. They
+              may need a document, an appointment, or permission to continue an
+              important process. The interface should reduce uncertainty. Too
+              often it adds more.
+            </p>
+            <p class={bodyParagraph}>
+              A weak form asks for unfamiliar information without explaining
+              why, marks errors only after submission, and clears useful work
+              when something goes wrong. None of these failures is visually
+              dramatic. Together, they make the service feel unreliable.
+            </p>
+            <blockquote
+              class="my-12 border-y border-l-4 border-y-line border-l-accent py-8 pl-[clamp(1.5rem,4vw,3rem)]"
+            >
+              <p
+                class="m-0 max-w-[22ch] text-[clamp(1.9rem,4vw,3.2rem)] leading-[1.12] tracking-[-0.035em]"
+              >
+                A working submit button is not the same as a usable service.
+              </p>
             </blockquote>
           </section>
 
-          <section class="mt-[clamp(4.5rem,8vw,7rem)] scroll-mt-8" id="friction">
+          <section
+            class="mt-[clamp(4.5rem,8vw,7rem)] scroll-mt-8"
+            id="friction"
+          >
             <p class={sectionNumber}>02</p>
             <h2 class={sectionHeading}>Where the form creates friction</h2>
-            <p class={bodyParagraph}>The first issue is language. Labels written for the database or internal office process force the visitor to translate the system before answering. Plain labels, short examples, and a sentence explaining unusual requests can remove that burden.</p>
+            <p class={bodyParagraph}>
+              The first issue is language. Labels written for the database or
+              internal office process force the visitor to translate the system
+              before answering. Plain labels, short examples, and a sentence
+              explaining unusual requests can remove that burden.
+            </p>
 
-            {findings.map((finding, index) => (
-              <div class="mt-10 grid grid-cols-[2.2rem_minmax(0,1fr)] gap-x-5 border-t border-line py-6 max-sm:grid-cols-[1.8rem_minmax(0,1fr)] max-sm:gap-x-3">
-                <span class="font-sans text-[0.68rem] font-bold text-accent">0{index + 1}</span>
-                <div>
-                  <h3 class="mb-1 font-display text-[1.35rem] leading-tight font-medium">{finding.title}</h3>
-                  <p class="m-0 text-base leading-relaxed text-muted">{finding.problem}</p>
+            {
+              findings.map((finding, index) => (
+                <div class="mt-10 grid grid-cols-[2.2rem_minmax(0,1fr)] gap-x-5 border-t border-line py-6 max-sm:grid-cols-[1.8rem_minmax(0,1fr)] max-sm:gap-x-3">
+                  <span class="font-sans text-[0.68rem] font-bold text-accent">
+                    0{index + 1}
+                  </span>
+                  <div>
+                    <h3 class="mb-1 font-display text-[1.35rem] leading-tight font-medium">
+                      {finding.title}
+                    </h3>
+                    <p class="m-0 text-base leading-relaxed text-muted">
+                      {finding.problem}
+                    </p>
+                  </div>
+                  <p class="col-start-2 mt-4 text-base leading-relaxed text-ink">
+                    <span class="mr-3 font-sans text-[0.65rem] font-bold uppercase tracking-[0.08em] text-accent">
+                      Fix
+                    </span>
+                    {finding.fix}
+                  </p>
                 </div>
-                <p class="col-start-2 mt-4 text-base leading-relaxed text-ink"><span class="mr-3 font-sans text-[0.65rem] font-bold uppercase tracking-[0.08em] text-accent">Fix</span>{finding.fix}</p>
-              </div>
-            ))}
+              ))
+            }
           </section>
 
           <section class="mt-[clamp(4.5rem,8vw,7rem)] scroll-mt-8" id="repair">
             <p class={sectionNumber}>03</p>
             <h2 class={sectionHeading}>A better approach</h2>
-            <p class={bodyParagraph}>Start by writing the journey in the visitor's language. State the outcome, list what is needed, and divide the form only where the steps match a real change in the task. Keep completed information safe when validation or the network fails.</p>
+            <p class={bodyParagraph}>
+              Start by writing the journey in the visitor's language. State the
+              outcome, list what is needed, and divide the form only where the
+              steps match a real change in the task. Keep completed information
+              safe when validation or the network fails.
+            </p>
             <div class="mt-10 border-t border-line">
-              {repairs.map(([label, copy]) => (
-                <p class="m-0 grid grid-cols-[minmax(8rem,.7fr)_1.3fr] gap-6 border-b border-line py-4 text-base leading-normal max-sm:grid-cols-1 max-sm:gap-1.5">
-                  <span class="font-sans text-[0.68rem] font-bold uppercase tracking-[0.05em] text-accent">{label}</span>{copy}
-                </p>
-              ))}
+              {
+                repairs.map(([label, copy]) => (
+                  <p class="m-0 grid grid-cols-[minmax(8rem,.7fr)_1.3fr] gap-6 border-b border-line py-4 text-base leading-normal max-sm:grid-cols-1 max-sm:gap-1.5">
+                    <span class="font-sans text-[0.68rem] font-bold uppercase tracking-[0.05em] text-accent">
+                      {label}
+                    </span>
+                    {copy}
+                  </p>
+                ))
+              }
             </div>
           </section>
 
-          <section class="mt-[clamp(4.5rem,8vw,7rem)] scroll-mt-8" id="standard">
+          <section
+            class="mt-[clamp(4.5rem,8vw,7rem)] scroll-mt-8"
+            id="standard"
+          >
             <p class={sectionNumber}>04</p>
             <h2 class={sectionHeading}>The wider standard</h2>
-            <p class={bodyParagraph}>Better forms do more than improve completion rates. They communicate respect. They tell people that their time, data, and attention matter. That should be the baseline for every digital service built for the public.</p>
-            <p class={bodyParagraph}>The useful question is not whether the page shipped. It is whether someone can understand it, complete it, recover from a mistake, and trust what happens next.</p>
+            <p class={bodyParagraph}>
+              Better forms do more than improve completion rates. They
+              communicate respect. They tell people that their time, data, and
+              attention matter. That should be the baseline for every digital
+              service built for the public.
+            </p>
+            <p class={bodyParagraph}>
+              The useful question is not whether the page shipped. It is whether
+              someone can understand it, complete it, recover from a mistake,
+              and trust what happens next.
+            </p>
           </section>
 
-          <footer class="mt-[clamp(5rem,10vw,8rem)] bg-surface p-[clamp(2rem,5vw,4rem)]">
-            <p class="m-0 mb-5 font-sans text-[0.72rem] font-bold uppercase tracking-[0.14em] text-accent">End of demonstration critique</p>
-            <h2 class="mb-8 max-w-[12ch] font-display text-[clamp(2rem,4vw,3.4rem)] leading-[1.05] font-medium tracking-[-0.04em]">Good criticism should leave a path forward.</h2>
-            <a class="flex w-fit items-center gap-2 border-b border-accent py-3 font-sans text-[0.84rem] font-bold text-accent-dark no-underline" href="/#stories">
+          <footer
+            class="mt-[clamp(5rem,10vw,8rem)] bg-surface p-[clamp(2rem,5vw,4rem)]"
+          >
+            <p
+              class="m-0 mb-5 font-sans text-[0.72rem] font-bold uppercase tracking-[0.14em] text-accent"
+            >
+              End of demonstration critique
+            </p>
+            <h2
+              class="mb-8 max-w-[12ch] font-display text-[clamp(2rem,4vw,3.4rem)] leading-[1.05] font-medium tracking-[-0.04em]"
+            >
+              Good criticism should leave a path forward.
+            </h2>
+            <a
+              class="flex w-fit items-center gap-2 border-b border-accent py-3 font-sans text-[0.84rem] font-bold text-accent-dark no-underline"
+              href="/#stories"
+            >
               Return to all critiques
-              <svg class="size-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round]" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" /></svg>
+              <svg
+                class="size-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round]"
+                viewBox="0 0 16 16"
+                aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg
+              >
             </a>
           </footer>
         </article>

@@ -27,6 +27,5 @@ COPY --from=web-build --chown=65532:65532 /source/dist /app/public
 ENV APP_ADDR=:8080
 ENV STATIC_DIR=/app/public
 EXPOSE 8080
-USER 65532:65532
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["/app/rwanda-free-space", "healthcheck"]
 ENTRYPOINT ["/app/rwanda-free-space"]

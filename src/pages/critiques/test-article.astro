@@ -1,47 +1,37 @@
 ---
-import SiteFooter from "../../components/SiteFooter.astro";
-import SiteHeader from "../../components/SiteHeader.astro";
-import "../../styles/global.css";
+import SiteFooter from '../../components/SiteFooter.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import '../../styles/global.css';
 
 const findings = [
   {
-    title: "The form hides its requirements",
-    problem:
-      "Required documents and accepted formats appear only after an upload fails.",
-    fix: "Show requirements before the visitor starts.",
+    title: 'The form hides its requirements',
+    problem: 'Required documents and accepted formats appear only after an upload fails.',
+    fix: 'Show requirements before the visitor starts.',
   },
   {
-    title: "Errors arrive without a recovery path",
-    problem:
-      "A red border signals a problem but does not explain what changed or how to continue.",
-    fix: "Name the error and place guidance beside the field.",
+    title: 'Errors arrive without a recovery path',
+    problem: 'A red border signals a problem but does not explain what changed or how to continue.',
+    fix: 'Name the error and place guidance beside the field.',
   },
   {
-    title: "Progress is invisible",
-    problem:
-      "Visitors cannot tell how much work remains or whether they can return later.",
-    fix: "Show scope, progress, and save behavior from the start.",
+    title: 'Progress is invisible',
+    problem: 'Visitors cannot tell how much work remains or whether they can return later.',
+    fix: 'Show scope, progress, and save behavior from the start.',
   },
 ];
 
 const repairs = [
-  ["Before starting", "Explain the outcome, documents, time, and cost."],
-  [
-    "While completing",
-    "Use familiar labels, useful defaults, and visible progress.",
-  ],
-  ["When errors happen", "Preserve input and explain exactly how to recover."],
-  [
-    "After submission",
-    "Confirm what happened and what the visitor should expect next.",
-  ],
+  ['Before starting', 'Explain the outcome, documents, time, and cost.'],
+  ['While completing', 'Use familiar labels, useful defaults, and visible progress.'],
+  ['When errors happen', 'Preserve input and explain exactly how to recover.'],
+  ['After submission', 'Confirm what happened and what the visitor should expect next.'],
 ];
 
-const sectionNumber =
-  "m-0 mb-2 font-sans text-[0.68rem] font-bold tracking-[0.12em] text-accent";
+const sectionNumber = 'm-0 mb-2 font-sans text-[0.68rem] font-bold tracking-[0.12em] text-accent';
 const sectionHeading =
-  "mb-6 font-display text-[clamp(2.35rem,4vw,3.7rem)] leading-[1.05] font-medium tracking-[-0.04em]";
-const bodyParagraph = "mb-5 text-pretty";
+  'mb-6 font-display text-[clamp(2.35rem,4vw,3.7rem)] leading-[1.05] font-medium tracking-[-0.04em]';
+const bodyParagraph = 'mb-5 text-pretty';
 ---
 
 <!doctype html>

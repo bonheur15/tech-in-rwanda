@@ -4,7 +4,7 @@ set -Eeuo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_dir"
 
-api_address="${APP_ADDR:-127.0.0.1:8080}"
+api_address="${APP_ADDR:-127.0.0.1:8787}"
 api_origin="${PUBLIC_API_BASE_URL:-http://$api_address}"
 allowed_origins="${APP_ALLOWED_ORIGINS:-http://localhost:4321,http://127.0.0.1:4321}"
 

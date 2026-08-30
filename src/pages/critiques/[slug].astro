@@ -1,18 +1,13 @@
 ---
-import BaseLayout from "../../layouts/BaseLayout.astro";
-const origin =
-  process.env.INTERNAL_API_URL ??
-  import.meta.env.INTERNAL_API_URL ??
-  Astro.url.origin;
+import BaseLayout from '../../layouts/BaseLayout.astro';
+const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
 const response = await fetch(
-  `${origin}/api/v1/public/posts/${encodeURIComponent(Astro.params.slug ?? "")}`,
+  `${origin}/api/v1/public/posts/${encodeURIComponent(Astro.params.slug ?? '')}`,
 );
-if (response.status === 404) return Astro.redirect("/404");
+if (response.status === 404) return Astro.redirect('/404');
 const payload = await response.json();
 const post = payload.data;
-const blocks = Array.isArray(post?.content?.content)
-  ? post.content.content
-  : [];
+const blocks = Array.isArray(post?.content?.content) ? post.content.content : [];
 const words = JSON.stringify(post?.content ?? {}).split(/\s+/).length;
 const readTime = Math.max(1, Math.ceil(words / 220));
 ---

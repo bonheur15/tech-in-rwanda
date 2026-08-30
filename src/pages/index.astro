@@ -8,6 +8,7 @@ const stories = [
     summary:
       "A closer look at the small teams turning local problems into focused, useful technology.",
     date: "30 August 2026",
+    datetime: "2026-08-30",
     readTime: "6 min read",
     tone: "red",
   },
@@ -17,6 +18,7 @@ const stories = [
     summary:
       "New access is changing how businesses work, students learn, and communities share information.",
     date: "28 August 2026",
+    datetime: "2026-08-28",
     readTime: "5 min read",
     tone: "ink",
   },
@@ -26,6 +28,7 @@ const stories = [
     summary:
       "Meet the developers creating tools, teaching peers, and shaping a more connected ecosystem.",
     date: "25 August 2026",
+    datetime: "2026-08-25",
     readTime: "7 min read",
     tone: "sand",
   },
@@ -120,7 +123,7 @@ const stories = [
                 <h3>{story.title}</h3>
                 <p class="story-summary">{story.summary}</p>
                 <p class="story-meta">
-                  <time datetime="2026-08-30">{story.date}</time>
+                  <time datetime={story.datetime}>{story.date}</time>
                   <span aria-hidden="true">·</span>
                   <span>{story.readTime}</span>
                 </p>

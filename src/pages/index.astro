@@ -41,7 +41,7 @@ const demoStories = [
 
 let stories = demoStories;
 try {
-  const origin = import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
+  const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
   const response = await fetch(`${origin}/api/v1/public/posts?limit=6`);
   if (response.ok) {
     const posts = (await response.json()).data;

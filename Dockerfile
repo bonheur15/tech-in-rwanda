@@ -21,8 +21,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 WORKDIR /app
-COPY --from=go-build --chown=65532:65532 /out/rwanda-free-space /app/rwanda-free-space
-COPY --from=web-build --chown=65532:65532 /source/dist /app/public
+COPY --from=go-build /out/rwanda-free-space /app/rwanda-free-space
+COPY --from=web-build /source/dist /app/public
 
 ENV APP_ADDR=:8080
 ENV STATIC_DIR=/app/public

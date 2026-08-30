@@ -3,8 +3,9 @@ import SiteFooter from "../components/SiteFooter.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import "../styles/global.css";
 
-const stories = [
+const demoStories = [
   {
+    slug: "test-article",
     category: "UX teardown",
     title: "What a broken public-service form teaches us about usable design",
     summary:
@@ -15,6 +16,7 @@ const stories = [
     tone: "bg-accent text-[#fffaf4]",
   },
   {
+    slug: "test-article",
     category: "Product critique",
     title: "A checkout that asks too much and explains too little",
     summary:
@@ -25,6 +27,7 @@ const stories = [
     tone: "bg-ink text-canvas",
   },
   {
+    slug: "test-article",
     category: "Accessibility",
     title: "The Rwandan websites that forget keyboard users",
     summary:
@@ -35,6 +38,24 @@ const stories = [
     tone: "bg-surface text-accent",
   },
 ];
+
+let stories = demoStories;
+try {
+  const origin = import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
+  const response = await fetch(`${origin}/api/v1/public/posts?limit=6`);
+  if (response.ok) {
+    const posts = (await response.json()).data;
+    if (posts?.length) stories = posts.map((post: any, index: number) => ({
+      ...post,
+      category: "Critique",
+      summary: post.excerpt,
+      date: post.publishedAt ? new Date(post.publishedAt).toLocaleDateString("en-RW", { dateStyle: "long", timeZone: "Africa/Kigali" }) : "",
+      datetime: post.publishedAt ?? "",
+      readTime: "Read critique",
+      tone: ["bg-accent text-[#fffaf4]", "bg-ink text-canvas", "bg-surface text-accent"][index % 3],
+    }));
+  }
+} catch { /* Keep the editorial sample while the API is unavailable in design-only development. */ }
 
 const eyebrow = "m-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] text-accent";
 ---
@@ -95,7 +116,7 @@ const eyebrow = "m-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] t
         <div class="grid grid-cols-3 gap-[clamp(1.25rem,2.5vw,2.25rem)] max-[800px]:grid-cols-1 max-[800px]:gap-12">
           {stories.map((story, index) => (
             <article class="max-[800px]:grid max-[800px]:grid-cols-[minmax(13rem,.8fr)_1fr] max-[800px]:gap-6 max-sm:block">
-              <a class="group block no-underline max-[800px]:contents max-sm:block" href="/critiques/test-article/" aria-label={`Read: ${story.title}`}>
+              <a class="group block no-underline max-[800px]:contents max-sm:block" href={`/critiques/${story.slug ?? "test-article"}/`} aria-label={`Read: ${story.title}`}>
                 <div class:list={["relative mb-6 grid aspect-[1.48] overflow-hidden border border-line max-[800px]:row-span-5 max-[800px]:row-start-1 max-[800px]:mb-0 max-sm:mb-6", story.tone]}>
                   <span class="z-10 m-4 self-start justify-self-start text-[0.7rem] font-bold tracking-[0.12em]">{String(index + 1).padStart(2, "0")}</span>
                   <svg class="absolute inset-0 size-full fill-none stroke-current stroke-[1.4] transition-transform duration-200 ease-out group-hover:scale-[1.035] motion-reduce:transition-none" viewBox="0 0 320 190" aria-hidden="true">

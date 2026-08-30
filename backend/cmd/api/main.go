@@ -12,6 +12,7 @@ import (
 
 	"rwandafreespace.com/blog/backend/internal/app"
 	"rwandafreespace.com/blog/backend/internal/platform/config"
+	"rwandafreespace.com/blog/backend/internal/platform/database"
 )
 
 func main() {
@@ -26,10 +27,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := app.NewServer(cfg, app.New(cfg, logger))
+	db, err := database.Open(context.Background(), cfg.DatabasePath)
+	if err != nil {
+		logger.Error("database startup failed", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	server := app.NewServer(cfg, app.New(cfg, db, logger))
 	serverErrors := make(chan error, 1)
 	go func() {
-		logger.Info("server starting", "address", cfg.Address, "static_enabled", app.StaticDirectoryExists(cfg.StaticDir))
+		logger.Info("server starting", "address", cfg.Address, "database", cfg.DatabasePath)
 		serverErrors <- server.ListenAndServe()
 	}()
 

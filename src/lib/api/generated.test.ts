@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { APIRequestError, clearServerTimeCache, getServerTime, type ServerTimeResponse } from "./generated";
+import { clearServerTimeCache, getServerTime, type ServerTimeResponse } from "./generated";
 
 const payload: ServerTimeResponse = {
   data: {
@@ -74,10 +74,13 @@ describe("getServerTime", () => {
     );
 
     const request = getServerTime({ baseUrl: "https://timeout.example.test", fetch: fetcher, timeoutMs: 10 });
+    const rejection = expect(request).rejects.toMatchObject({
+      name: "APIRequestError",
+      code: "request_aborted",
+    });
     await vi.advanceTimersByTimeAsync(11);
 
-    await expect(request).rejects.toBeInstanceOf(APIRequestError);
-    await expect(request).rejects.toMatchObject({ code: "request_aborted" });
+    await rejection;
   });
 });
 

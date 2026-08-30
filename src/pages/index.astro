@@ -1,0 +1,152 @@
+---
+import SiteFooter from "../components/SiteFooter.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import "../styles/global.css";
+
+const stories = [
+  {
+    category: "UX teardown",
+    title: "What a broken public-service form teaches us about usable design",
+    summary:
+      "The confusing fields, missing feedback, and dead ends that make a simple online task harder, plus a practical way to rebuild it.",
+    date: "30 August 2026",
+    datetime: "2026-08-30",
+    readTime: "6 min read",
+    tone: "bg-accent text-[#fffaf4]",
+  },
+  {
+    category: "Product critique",
+    title: "A checkout that asks too much and explains too little",
+    summary:
+      "We trace where trust disappears in a local shopping flow and show the smaller decisions that would make it feel reliable.",
+    date: "28 August 2026",
+    datetime: "2026-08-28",
+    readTime: "5 min read",
+    tone: "bg-ink text-canvas",
+  },
+  {
+    category: "Accessibility",
+    title: "The Rwandan websites that forget keyboard users",
+    summary:
+      "A plain-language look at invisible focus, unreachable menus, and fixes that improve the experience for everyone.",
+    date: "25 August 2026",
+    datetime: "2026-08-25",
+    readTime: "7 min read",
+    tone: "bg-surface text-accent",
+  },
+];
+
+const eyebrow = "m-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] text-accent";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta
+      name="description"
+      content="Constructive critiques of broken websites, products, and digital experiences in Rwanda, with practical ideas for fixing them."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Rwanda Free Space | Honest critiques of local digital products</title>
+  </head>
+  <body>
+    <a class="fixed top-3 left-3 z-50 -translate-y-[160%] bg-ink px-4 py-2.5 text-canvas focus:translate-y-0" href="#main-content">Skip to content</a>
+    <SiteHeader />
+
+    <main class="mx-auto w-full max-w-[90rem]" id="main-content">
+      <section class="grid min-h-[39rem] grid-cols-[minmax(0,1.08fr)_minmax(21rem,.92fr)] border-b border-line px-[clamp(1.25rem,4vw,4.5rem)] max-[800px]:grid-cols-1" aria-labelledby="hero-title">
+        <div class="flex flex-col items-start justify-center py-[clamp(5rem,9vw,8.5rem)] pr-[clamp(2rem,5vw,5rem)] max-[800px]:pr-0 max-sm:py-16">
+          <p class={eyebrow}>An independent space for Rwandan tech criticism</p>
+          <h1 class="mb-6 max-w-[15ch] font-display text-[clamp(3.1rem,4.9vw,5.4rem)] leading-[.98] font-medium tracking-[-0.05em] text-pretty max-[800px]:max-w-[14ch] max-[800px]:text-[clamp(3rem,8vw,4.25rem)] max-sm:max-w-[13ch] max-sm:text-[clamp(2.75rem,12vw,3.45rem)] max-sm:leading-none" id="hero-title">Good technology starts with honest criticism.</h1>
+          <p class="m-0 mb-9 max-w-[41rem] text-[clamp(1.02rem,1.35vw,1.22rem)] leading-[1.7] text-muted text-pretty">
+            We document broken websites, frustrating products, and weak design decisions in Rwanda, then
+            explain what went wrong and how they could be better.
+          </p>
+          <a class="flex w-fit items-center gap-2 border-b border-accent py-3 text-[0.84rem] font-bold text-accent-dark no-underline" href="#stories">
+            Read the latest critiques
+            <svg class="size-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round]" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" /></svg>
+          </a>
+        </div>
+
+        <div class="relative flex min-h-full flex-col justify-between overflow-hidden bg-accent p-8 text-[#fffaf4] max-[800px]:mx-[calc(clamp(1.25rem,4vw,4.5rem)*-1)] max-[800px]:min-h-[26rem]" aria-hidden="true">
+          <span class="pointer-events-none absolute inset-0 bg-[radial-gradient(rgba(255,255,255,.15)_0.7px,transparent_0.7px)] bg-[length:5px_5px] opacity-30"></span>
+          <span class="relative z-10 self-end text-[0.68rem] font-bold tracking-[0.15em]">RFS / 250</span>
+          <svg class="absolute -bottom-[2%] -left-[10%] w-[119%]" viewBox="0 0 520 430" role="presentation">
+            <circle class="fill-[#fffaf4]" cx="363" cy="101" r="39" />
+            <path class="fill-none stroke-[#fffaf4] stroke-[1.8] opacity-90 [stroke-linecap:round]" d="M363 40v-20M363 182v-20M302 101h-20M444 101h-20M320 58l-14-14M420 158l-14-14M320 144l-14 14M420 44l-14 14" />
+            <path class="fill-ink opacity-[.98]" d="M0 319c73-33 130-16 189-58 68-48 113-120 190-106 67 12 86 83 141 96v179H0Z" />
+            <path class="fill-none stroke-[#fffaf4] stroke-[1.2] opacity-60" d="M-16 330c98-44 152-13 221-72 54-47 107-124 185-100 47 14 72 75 146 101" />
+          </svg>
+          <p class="relative z-10 m-0 max-w-48 font-display text-[1.4rem] leading-tight">Find the friction.<br />Explain the fix.</p>
+        </div>
+      </section>
+
+      <section class="px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(5rem,9vw,8rem)]" id="stories" aria-labelledby="stories-title">
+        <div class="mb-10 flex items-end justify-between gap-8 max-sm:flex-col max-sm:items-start">
+          <div>
+            <p class={eyebrow}>Observed, tested, explained</p>
+            <h2 class="m-0 font-display text-[clamp(2.3rem,4vw,4.25rem)] leading-[1.05] font-medium tracking-[-0.04em]" id="stories-title">Latest critiques</h2>
+          </div>
+          <a class="text-[0.82rem] font-bold text-muted underline underline-offset-4 hover:text-accent" href="/critiques/test-article/">Open test article</a>
+        </div>
+
+        <div class="grid grid-cols-3 gap-[clamp(1.25rem,2.5vw,2.25rem)] max-[800px]:grid-cols-1 max-[800px]:gap-12">
+          {stories.map((story, index) => (
+            <article class="max-[800px]:grid max-[800px]:grid-cols-[minmax(13rem,.8fr)_1fr] max-[800px]:gap-6 max-sm:block">
+              <a class="group block no-underline max-[800px]:contents max-sm:block" href="/critiques/test-article/" aria-label={`Read: ${story.title}`}>
+                <div class:list={["relative mb-6 grid aspect-[1.48] overflow-hidden border border-line max-[800px]:row-span-5 max-[800px]:row-start-1 max-[800px]:mb-0 max-sm:mb-6", story.tone]}>
+                  <span class="z-10 m-4 self-start justify-self-start text-[0.7rem] font-bold tracking-[0.12em]">{String(index + 1).padStart(2, "0")}</span>
+                  <svg class="absolute inset-0 size-full fill-none stroke-current stroke-[1.4] transition-transform duration-200 ease-out group-hover:scale-[1.035] motion-reduce:transition-none" viewBox="0 0 320 190" aria-hidden="true">
+                    <path d="M-20 151c45-28 81-26 121-4 46 25 80 19 118-30 28-36 63-50 121-29" />
+                    <circle class="fill-current stroke-none" cx={index === 1 ? 220 : 238} cy={index === 2 ? 70 : 54} r="28" />
+                  </svg>
+                </div>
+                <p class="m-0 mb-2 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-accent">{story.category}</p>
+                <h3 class="mb-3 font-display text-[clamp(1.45rem,2vw,2rem)] leading-[1.15] font-medium tracking-[-0.025em] text-pretty">{story.title}</h3>
+                <p class="m-0 text-sm leading-[1.65] text-muted text-pretty">{story.summary}</p>
+                <p class="mt-4 flex gap-2 text-[0.7rem] text-muted">
+                  <time datetime={story.datetime}>{story.date}</time><span aria-hidden="true">·</span><span>{story.readTime}</span>
+                </p>
+              </a>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section class="grid grid-cols-2 gap-[clamp(3rem,8vw,9rem)] bg-ink px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(5rem,9vw,8rem)] text-canvas max-[800px]:grid-cols-1" id="topics" aria-labelledby="topics-title">
+        <div>
+          <p class={eyebrow}>What we examine</p>
+          <h2 class="m-0 font-display text-[clamp(2.3rem,4vw,4.25rem)] leading-[1.05] font-medium tracking-[-0.04em] text-pretty" id="topics-title">Criticism that points<br class="max-sm:hidden" /> toward a better product.</h2>
+        </div>
+        <ul class="m-0 list-none border-t border-[#475049] p-0">
+          {[
+            ["01", "Websites & online forms", "websites"],
+            ["02", "Apps & digital products", "products"],
+            ["03", "Accessibility & inclusion", "accessibility"],
+            ["04", "Public digital services", "public-tech"],
+          ].map(([number, label, anchor]) => (
+            <li class="border-b border-[#475049]">
+              <a class="flex min-h-18 items-center gap-5 no-underline hover:text-[#f6b0a8]" href={`#${anchor}`}>
+                <span class="text-[0.68rem] text-[#969b96]">{number}</span><span>{label}</span><span class="ml-auto text-xl text-accent" aria-hidden="true">↗</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section class="grid grid-cols-[.7fr_1.15fr_1fr] items-start gap-[clamp(2rem,5vw,6rem)] border-b border-line px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(5rem,9vw,8rem)] max-[800px]:grid-cols-1" id="about" aria-labelledby="about-title">
+        <p class={eyebrow}>Why this blog exists</p>
+        <h2 class="m-0 max-w-[12ch] font-display text-[clamp(2.3rem,4vw,4.25rem)] leading-[1.05] font-medium tracking-[-0.04em]" id="about-title">Critique the work, improve the standard.</h2>
+        <p class="m-0 max-w-xl text-muted">
+          Rwanda Free Space independently documents where local digital experiences fail the people using
+          them. The goal is not ridicule. Each critique identifies the problem, explains its impact, and
+          offers a realistic path toward a clearer, more accessible, and more trustworthy product.
+        </p>
+      </section>
+    </main>
+
+    <SiteFooter />
+  </body>
+</html>

@@ -75,6 +75,29 @@ func TestServesBuiltAstroFiles(t *testing.T) {
 	}
 }
 
+func TestRedirectsStaticPageDirectoryToTrailingSlash(t *testing.T) {
+	directory := t.TempDir()
+	pageDirectory := filepath.Join(directory, "server-time")
+	if err := os.MkdirAll(pageDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pageDirectory, "index.html"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := New(testConfig(directory), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	request := httptest.NewRequest(http.MethodGet, "/server-time", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMovedPermanently)
+	}
+	if got := recorder.Header().Get("Location"); got != "server-time/" {
+		t.Fatalf("Location = %q, want server-time/", got)
+	}
+}
+
 func testConfig(staticDirectory string) config.Config {
 	return config.Config{
 		Address:           ":0",

@@ -9,13 +9,13 @@ import (
 )
 
 type Config struct {
-	Address          string
-	StaticDir        string
-	AllowedOrigins   map[string]struct{}
-	ShutdownTimeout  time.Duration
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
-	IdleTimeout      time.Duration
+	Address           string
+	StaticDir         string
+	AllowedOrigins    map[string]struct{}
+	ShutdownTimeout   time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
 	ReadHeaderTimeout time.Duration
 }
 

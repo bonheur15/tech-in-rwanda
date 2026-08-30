@@ -45,39 +45,35 @@ export class APIRequestError extends Error {
   constructor(
     message: string,
     public status = 0,
-    public code = "request_failed",
+    public code = 'request_failed',
     public requestId?: string,
   ) {
     super(message);
-    this.name = "APIRequestError";
+    this.name = 'APIRequestError';
   }
 }
 type Entry = { value: unknown; expires: number; tags: Set<string> };
 const cache = new Map<string, Entry>();
 const pending = new Map<string, Promise<unknown>>();
 const csrf = () =>
-  typeof document === "undefined"
-    ? ""
+  typeof document === 'undefined'
+    ? ''
     : decodeURIComponent(
         document.cookie
-          .split("; ")
-          .find(
-            (v) =>
-              v.startsWith("__Host-rfs_csrf=") || v.startsWith("rfs_csrf="),
-          )
-          ?.split("=")[1] ?? "",
+          .split('; ')
+          .find((v) => v.startsWith('__Host-rfs_csrf=') || v.startsWith('rfs_csrf='))
+          ?.split('=')[1] ?? '',
       );
 function endpoint(path: string, base?: string) {
   const root =
     base ??
-    (typeof window === "undefined"
-      ? (import.meta.env.INTERNAL_API_URL ?? "http://127.0.0.1:8081")
-      : "");
-  return root.replace(/\/$/, "") + path;
+    (typeof window === 'undefined'
+      ? (import.meta.env.INTERNAL_API_URL ?? 'http://127.0.0.1:8081')
+      : '');
+  return root.replace(/\/$/, '') + path;
 }
 export function invalidateTags(...tags: string[]) {
-  for (const [key, item] of cache)
-    if (tags.some((tag) => item.tags.has(tag))) cache.delete(key);
+  for (const [key, item] of cache) if (tags.some((tag) => item.tags.has(tag))) cache.delete(key);
 }
 export async function request<T>(
   method: string,
@@ -87,186 +83,126 @@ export async function request<T>(
   tags: string[] = [],
 ): Promise<T> {
   const url = endpoint(path, options.baseUrl),
-    key = method + ":" + url;
-  if (method === "GET" && !options.forceRefresh) {
+    key = method + ':' + url;
+  if (method === 'GET' && !options.forceRefresh) {
     const hit = cache.get(key);
     if (hit && hit.expires > Date.now()) return hit.value as T;
-    if (!options.signal && pending.has(key))
-      return pending.get(key) as Promise<T>;
+    if (!options.signal && pending.has(key)) return pending.get(key) as Promise<T>;
   }
   const controller = new AbortController(),
     timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 8000),
     abort = () => controller.abort(options.signal?.reason);
-  options.signal?.addEventListener("abort", abort, { once: true });
+  options.signal?.addEventListener('abort', abort, { once: true });
   const run = (async () => {
     try {
       const multipart = body instanceof FormData;
       const response = await (options.fetch ?? fetch)(url, {
         method,
-        credentials: "same-origin",
+        credentials: 'same-origin',
         headers: {
-          Accept: "application/json",
-          ...(multipart ? {} : { "Content-Type": "application/json" }),
-          ...(method === "GET"
-            ? {}
-            : { "X-CSRF-Token": options.csrfToken ?? csrf() }),
-          ...(options.idempotencyKey
-            ? { "Idempotency-Key": options.idempotencyKey }
-            : {}),
+          Accept: 'application/json',
+          ...(multipart ? {} : { 'Content-Type': 'application/json' }),
+          ...(method === 'GET' ? {} : { 'X-CSRF-Token': options.csrfToken ?? csrf() }),
+          ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
         },
-        body:
-          body === undefined
-            ? undefined
-            : multipart
-              ? body
-              : JSON.stringify(body),
+        body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
         signal: controller.signal,
         cache:
-          path.includes("/auth/") ||
-          path.includes("/sessions") ||
-          path.includes("/draft") ||
-          path.includes("/admin/")
-            ? "no-store"
-            : "default",
+          path.includes('/auth/') ||
+          path.includes('/sessions') ||
+          path.includes('/draft') ||
+          path.includes('/admin/')
+            ? 'no-store'
+            : 'default',
       });
       const payload = await response.json().catch(() => undefined);
       if (!response.ok) {
         const e = payload?.error;
         throw new APIRequestError(
-          e?.message ?? "API request failed",
+          e?.message ?? 'API request failed',
           response.status,
           e?.code,
           e?.requestId,
         );
       }
-      if (!payload || !("data" in payload))
-        throw new APIRequestError(
-          "Invalid API response",
-          response.status,
-          "invalid_response",
-        );
-      if (method === "GET" && (options.ttlMs ?? 15000) > 0)
+      if (!payload || !('data' in payload))
+        throw new APIRequestError('Invalid API response', response.status, 'invalid_response');
+      if (method === 'GET' && (options.ttlMs ?? 15000) > 0)
         cache.set(key, {
           value: payload.data,
           expires: Date.now() + (options.ttlMs ?? 15000),
           tags: new Set(tags),
         });
-      if (method !== "GET") invalidateTags(...tags);
+      if (method !== 'GET') invalidateTags(...tags);
       return payload.data as T;
     } catch (error) {
       if (error instanceof APIRequestError) throw error;
       if (controller.signal.aborted)
-        throw new APIRequestError(
-          "Request cancelled or timed out",
-          0,
-          "request_aborted",
-        );
-      throw new APIRequestError(
-        error instanceof Error ? error.message : "Network request failed",
-      );
+        throw new APIRequestError('Request cancelled or timed out', 0, 'request_aborted');
+      throw new APIRequestError(error instanceof Error ? error.message : 'Network request failed');
     } finally {
       clearTimeout(timer);
-      options.signal?.removeEventListener("abort", abort);
+      options.signal?.removeEventListener('abort', abort);
       pending.delete(key);
     }
   })();
-  if (method === "GET" && !options.signal) pending.set(key, run);
+  if (method === 'GET' && !options.signal) pending.set(key, run);
   return run;
 }
 export const api = {
   requestStaffOTP: (email: string, o?: RequestOptions) =>
-    request<{ accepted: boolean }>(
-      "POST",
-      "/api/v1/auth/staff/request-otp",
-      { email },
-      o,
-    ),
+    request<{ accepted: boolean }>('POST', '/api/v1/auth/staff/request-otp', { email }, o),
   verifyStaffOTP: (email: string, code: string, o?: RequestOptions) =>
     request<{ identityId: string; csrfToken: string }>(
-      "POST",
-      "/api/v1/auth/staff/verify-otp",
+      'POST',
+      '/api/v1/auth/staff/verify-otp',
       { email, code },
       o,
     ),
-  requestReaderOTP: (
-    email: string,
-    turnstileToken: string,
-    o?: RequestOptions,
-  ) =>
+  requestReaderOTP: (email: string, turnstileToken: string, o?: RequestOptions) =>
     request<{ accepted: boolean }>(
-      "POST",
-      "/api/v1/auth/readers/request-otp",
+      'POST',
+      '/api/v1/auth/readers/request-otp',
       { email, turnstileToken },
       o,
     ),
   listPosts: (o?: RequestOptions) =>
-    request<Post[]>("GET", "/api/v1/public/posts", undefined, o, ["archive"]),
+    request<Post[]>('GET', '/api/v1/public/posts', undefined, o, ['archive']),
   getPost: (slug: string, o?: RequestOptions) =>
-    request<Post>(
-      "GET",
-      "/api/v1/public/posts/" + encodeURIComponent(slug),
-      undefined,
-      o,
-      ["post:" + slug],
-    ),
-  createPost: (
-    input: Pick<Post, "title" | "excerpt" | "content">,
-    o?: RequestOptions,
-  ) => request<Post>("POST", "/api/v1/posts", input, o, ["archive"]),
+    request<Post>('GET', '/api/v1/public/posts/' + encodeURIComponent(slug), undefined, o, [
+      'post:' + slug,
+    ]),
+  createPost: (input: Pick<Post, 'title' | 'excerpt' | 'content'>, o?: RequestOptions) =>
+    request<Post>('POST', '/api/v1/posts', input, o, ['archive']),
   saveDraft: (
     id: string,
-    input: Pick<Post, "title" | "excerpt" | "content" | "revision">,
+    input: Pick<Post, 'title' | 'excerpt' | 'content' | 'revision'>,
     o?: RequestOptions,
-  ) =>
-    request<Post>("PUT", "/api/v1/posts/" + id + "/draft", input, o, [
-      "post:" + id,
-    ]),
+  ) => request<Post>('PUT', '/api/v1/posts/' + id + '/draft', input, o, ['post:' + id]),
   publish: (id: string, o?: RequestOptions) =>
-    request<{ versionId: string }>(
-      "POST",
-      "/api/v1/posts/" + id + "/publish",
-      {},
-      o,
-      ["post:" + id, "archive"],
-    ),
+    request<{ versionId: string }>('POST', '/api/v1/posts/' + id + '/publish', {}, o, [
+      'post:' + id,
+      'archive',
+    ]),
   fork: (id: string, o?: RequestOptions) =>
-    request<Post>("POST", "/api/v1/posts/" + id + "/fork", {}, o, ["archive"]),
+    request<Post>('POST', '/api/v1/posts/' + id + '/fork', {}, o, ['archive']),
   sessions: (o?: RequestOptions) =>
-    request<Session[]>("GET", "/api/v1/sessions", undefined, {
+    request<Session[]>('GET', '/api/v1/sessions', undefined, {
       ...o,
       ttlMs: 0,
     }),
   upload: (data: FormData, o?: RequestOptions) =>
-    request<{ id: string; src: string }>("POST", "/api/v1/media", data, o, [
-      "media",
-    ]),
+    request<{ id: string; src: string }>('POST', '/api/v1/media', data, o, ['media']),
   bookmarks: (o?: RequestOptions) =>
-    request<Post[]>("GET", "/api/v1/bookmarks", undefined, { ...o, ttlMs: 0 }, [
-      "bookmarks",
-    ]),
+    request<Post[]>('GET', '/api/v1/bookmarks', undefined, { ...o, ttlMs: 0 }, ['bookmarks']),
   bookmark: (id: string, o?: RequestOptions) =>
-    request("POST", "/api/v1/articles/" + id + "/bookmarks", {}, o, [
-      "bookmarks",
-    ]),
+    request('POST', '/api/v1/articles/' + id + '/bookmarks', {}, o, ['bookmarks']),
   comments: (id: string, o?: RequestOptions) =>
-    request<unknown[]>(
-      "GET",
-      "/api/v1/articles/" + id + "/comments",
-      undefined,
-      o,
-      ["comments:" + id],
-    ),
-  comment: (
-    id: string,
-    body: string,
-    parentId: string | null,
-    o?: RequestOptions,
-  ) =>
-    request(
-      "POST",
-      "/api/v1/articles/" + id + "/comments",
-      { body, parentId },
-      o,
-      ["comments:" + id],
-    ),
+    request<unknown[]>('GET', '/api/v1/articles/' + id + '/comments', undefined, o, [
+      'comments:' + id,
+    ]),
+  comment: (id: string, body: string, parentId: string | null, o?: RequestOptions) =>
+    request('POST', '/api/v1/articles/' + id + '/comments', { body, parentId }, o, [
+      'comments:' + id,
+    ]),
 };

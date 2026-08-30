@@ -21,7 +21,7 @@ npm install
 make dev
 ```
 
-Open `http://127.0.0.1:4321/server-time/`. Astro runs on port 4321 and Go runs on port 8080. Stopping `make dev` stops both processes.
+Open `http://127.0.0.1:4321/server-time/`. Astro runs on port 4321 and Go runs on port 8787. Stopping `make dev` stops both processes.
 
 When a Go API contract changes, regenerate the browser client:
 

@@ -41,7 +41,7 @@ vet: ## Run Go static analysis
 check: generate-check format-check vet test ## Run the complete quality gate
 	@$(NPM) run check
 	@$(NPM) run build
-	@$(GO) build ./backend/cmd/api
+	@$(MAKE) --no-print-directory api-build
 
 build: web-build api-build ## Build the static site and Go server
 

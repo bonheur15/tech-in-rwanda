@@ -154,7 +154,7 @@ nav a:hover,
   justify-content: center;
   align-items: flex-start;
   padding-block: clamp(5rem, 9vw, 8.5rem);
-  padding-inline-end: clamp(2rem, 7vw, 7.5rem);
+  padding-inline-end: clamp(2rem, 5vw, 5rem);
 }
 
 .eyebrow {
@@ -182,11 +182,11 @@ h3 {
 }
 
 h1 {
-  max-width: 13ch;
-  margin-block-end: 1.75rem;
-  font-size: clamp(3.3rem, 6.8vw, 6.75rem);
-  line-height: 0.96;
-  letter-spacing: -0.058em;
+  max-width: 15ch;
+  margin-block-end: 1.5rem;
+  font-size: clamp(3.1rem, 4.9vw, 5.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
 }
 
 .hero-intro {
@@ -502,6 +502,11 @@ footer p {
     padding-inline-end: 0;
   }
 
+  h1 {
+    max-width: 14ch;
+    font-size: clamp(3rem, 8vw, 4.25rem);
+  }
+
   .hero-art {
     min-height: 26rem;
     margin-inline: calc(var(--page-gutter) * -1);
@@ -548,11 +553,13 @@ footer p {
   }
 
   .hero-copy {
-    padding-block: 4.5rem;
+    padding-block: 4rem;
   }
 
   h1 {
-    font-size: clamp(3rem, 15vw, 4.25rem);
+    max-width: 13ch;
+    font-size: clamp(2.75rem, 12vw, 3.45rem);
+    line-height: 1;
   }
 
   .section-heading {

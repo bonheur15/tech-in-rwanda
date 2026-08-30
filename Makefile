@@ -21,17 +21,13 @@ generate: ## Generate the TypeScript API client from the Go contract
 generate-check: ## Verify generated API code is current
 	@$(GO) run ./backend/cmd/gen-client -out src/lib/api/generated.ts -check
 
-PRETTIER_FILES := \
-	src astro.config.mjs tsconfig.json Dockerfile .dockerignore \
-	$(shell find . -maxdepth 2 -name '*.mjs' -not -path './node_modules/*' -not -path './dist/*')
-
-format: ## Format Go, TypeScript, Astro, CSS and Docker formatting
+format: ## Format Go, TypeScript, Astro and CSS
 	@gofmt -w backend
-	@$(NPM) exec prettier -- --write $(PRETTIER_FILES)
+	@$(NPM) exec biome -- format --write .
 
-format-check: ## Verify Go, TS, Astro, CSS and Docker formatting
+format-check: ## Verify Go, TS, Astro and CSS formatting
 	@files="$$(gofmt -l backend)"; if [[ -n "$$files" ]]; then echo "Go files need formatting:"; echo "$$files"; exit 1; fi
-	@$(NPM) exec prettier -- --check $(PRETTIER_FILES)
+	@$(NPM) exec biome -- format .
 
 test: test-go test-web ## Run backend and frontend tests
 

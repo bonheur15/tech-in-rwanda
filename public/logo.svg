@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title desc">
+  <title id="title">Rwanda Free Space</title>
+  <desc id="desc">An open conversation frame representing free and constructive criticism.</desc>
+  <rect width="48" height="48" fill="#c53a2e"/>
+  <path d="M13 12.5h18.5M12.5 13v20h8v5.5l7-5.5H35V20" fill="none" stroke="#fffaf4" stroke-width="2.6" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M31 12.5h4v4" fill="none" stroke="#fffaf4" stroke-width="2.6" stroke-linecap="square"/>
+  <path d="M18 20h12M18 25h9" fill="none" stroke="#fffaf4" stroke-width="2.2"/>
+</svg>

@@ -4,6 +4,7 @@ dist/
 bin/
 /api
 coverage/
+.data/
 .env
 .env.*
 !.env.example

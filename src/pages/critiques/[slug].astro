@@ -1,0 +1,25 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+const origin = import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
+const response = await fetch(`${origin}/api/v1/public/posts/${encodeURIComponent(Astro.params.slug ?? "")}`);
+if (response.status === 404) return Astro.redirect("/404");
+const payload = await response.json();
+const post = payload.data;
+const blocks = Array.isArray(post?.content?.content) ? post.content.content : [];
+const words = JSON.stringify(post?.content ?? {}).split(/\s+/).length;
+const readTime = Math.max(1, Math.ceil(words / 220));
+---
+<BaseLayout title={`${post.title} | Rwanda Free Space`} description={post.excerpt} canonical={new URL(`/critiques/${post.slug}/`, Astro.url.origin).toString()}>
+  <main id="main-content" class="mx-auto max-w-[82rem] px-[clamp(1.25rem,5vw,5rem)] py-[clamp(4rem,8vw,8rem)]">
+    <a href="/#stories" class="text-sm text-muted">← All critiques</a>
+    <header class="mx-auto mt-16 max-w-4xl border-b border-line pb-12 text-center">
+      {post.sourcePostId && <p class="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Forked critique</p>}
+      <h1 class="font-display text-[clamp(3rem,6vw,6.2rem)] leading-[.98] tracking-[-.055em] text-pretty">{post.title}</h1>
+      <p class="mx-auto mt-7 max-w-2xl text-lg leading-relaxed text-muted">{post.excerpt}</p>
+      <p class="mt-8 text-xs uppercase tracking-widest text-muted">{readTime} min read · {post.publishedAt && new Date(post.publishedAt).toLocaleDateString("en-RW", { dateStyle: "long", timeZone: "Africa/Kigali" })}</p>
+    </header>
+    <article class="article-body mx-auto mt-16 max-w-3xl">
+      {blocks.map((block: any) => block.type === "heading" ? <h2>{block.content?.map((x:any)=>x.text).join("")}</h2> : block.type === "blockquote" ? <blockquote>{block.content?.[0]?.content?.map((x:any)=>x.text).join("")}</blockquote> : block.type === "horizontalRule" ? <hr/> : block.type === "image" ? <figure class:list={[block.attrs?.placement === "wide" && "md:-mx-24", block.attrs?.placement === "full" && "md:-mx-48"]}><img src={block.attrs?.src} alt={block.attrs?.alt ?? ""}/>{block.attrs?.caption && <figcaption>{block.attrs.caption}</figcaption>}</figure> : <p>{block.content?.map((x:any)=>x.text).join("")}</p>)}
+    </article>
+  </main>
+</BaseLayout>

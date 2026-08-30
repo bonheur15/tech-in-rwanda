@@ -234,9 +234,12 @@ h1 {
   width: 119%;
 }
 
-.hero-art circle,
 .art-land {
   fill: var(--ink);
+}
+
+.art-sun {
+  fill: #fffaf4;
 }
 
 .art-land {
@@ -244,11 +247,20 @@ h1 {
 }
 
 .art-line,
-.art-grid {
+.art-rays {
   fill: none;
   stroke: #fffaf4;
   stroke-width: 1.2;
+}
+
+.art-line {
   opacity: 0.62;
+}
+
+.art-rays {
+  stroke-linecap: round;
+  stroke-width: 1.8;
+  opacity: 0.9;
 }
 
 .hero-art p,

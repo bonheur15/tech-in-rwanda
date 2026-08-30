@@ -1,57 +1,54 @@
-import { useEffect, useMemo, useState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
+import { useEffect, useMemo, useState } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Image from '@tiptap/extension-image';
 
 const csrf = () =>
   decodeURIComponent(
     document.cookie
-      .split("; ")
-      .find(
-        (v) => v.startsWith("__Host-rfs_csrf=") || v.startsWith("rfs_csrf="),
-      )
-      ?.split("=")[1] ?? "",
+      .split('; ')
+      .find((v) => v.startsWith('__Host-rfs_csrf=') || v.startsWith('rfs_csrf='))
+      ?.split('=')[1] ?? '',
   );
 async function api(path: string, init: RequestInit = {}) {
   const response = await fetch(path, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
-      "X-CSRF-Token": csrf(),
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrf(),
       ...(init.headers ?? {}),
     },
   });
   const body = await response.json();
-  if (!response.ok) throw new Error(body.error?.message ?? "Request failed");
+  if (!response.ok) throw new Error(body.error?.message ?? 'Request failed');
   return body.data;
 }
 
 export default function EditorialWorkspace() {
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
   const [signedIn, setSignedIn] = useState(false);
-  const [postId, setPostId] = useState("");
-  const [title, setTitle] = useState("Untitled critique");
-  const [excerpt, setExcerpt] = useState("");
+  const [postId, setPostId] = useState('');
+  const [title, setTitle] = useState('Untitled critique');
+  const [excerpt, setExcerpt] = useState('');
   const [revision, setRevision] = useState(1);
-  const [saveState, setSaveState] = useState("saved");
-  const [error, setError] = useState("");
+  const [saveState, setSaveState] = useState('saved');
+  const [error, setError] = useState('');
   const editor = useEditor({
     extensions: [StarterKit, Image.configure({ allowBase64: false })],
-    content:
-      "<p>Start with what you observed, then explain why it matters.</p>",
+    content: '<p>Start with what you observed, then explain why it matters.</p>',
     immediatelyRender: false,
-    onUpdate: () => setSaveState(navigator.onLine ? "waiting" : "offline"),
+    onUpdate: () => setSaveState(navigator.onLine ? 'waiting' : 'offline'),
   });
   const payload = useMemo(() => editor?.getJSON(), [editor, saveState]);
 
   useEffect(() => {
-    if (!postId || saveState !== "waiting") return;
+    if (!postId || saveState !== 'waiting') return;
     const timer = window.setTimeout(async () => {
-      setSaveState("saving");
+      setSaveState('saving');
       try {
         const p = await api(`/api/v1/posts/${postId}/draft`, {
-          method: "PUT",
+          method: 'PUT',
           body: JSON.stringify({
             title,
             excerpt,
@@ -60,10 +57,10 @@ export default function EditorialWorkspace() {
           }),
         });
         setRevision(p.revision);
-        setSaveState("saved");
+        setSaveState('saved');
       } catch (e) {
         setError(String(e));
-        setSaveState("retrying");
+        setSaveState('retrying');
       }
     }, 2000);
     return () => clearTimeout(timer);
@@ -71,12 +68,8 @@ export default function EditorialWorkspace() {
   if (!signedIn)
     return (
       <section className="mx-auto max-w-md rounded-sm border border-line bg-white p-8">
-        <p className="text-xs font-bold uppercase tracking-widest text-accent">
-          Staff workspace
-        </p>
-        <h1 className="mt-3 font-display text-4xl">
-          Write with room to think.
-        </h1>
+        <p className="text-xs font-bold uppercase tracking-widest text-accent">Staff workspace</p>
+        <h1 className="mt-3 font-display text-4xl">Write with room to think.</h1>
         <label className="mt-8 block text-sm">
           Email
           <input
@@ -88,11 +81,11 @@ export default function EditorialWorkspace() {
         <button
           className="mt-4 w-full bg-ink p-3 text-canvas"
           onClick={async () => {
-            await api("/api/v1/auth/staff/request-otp", {
-              method: "POST",
+            await api('/api/v1/auth/staff/request-otp', {
+              method: 'POST',
               body: JSON.stringify({ email }),
             });
-            setError("Code sent. In development, check the API terminal.");
+            setError('Code sent. In development, check the API terminal.');
           }}
         >
           Send sign-in code
@@ -110,12 +103,12 @@ export default function EditorialWorkspace() {
           className="mt-4 w-full bg-accent p-3 text-white"
           onClick={async () => {
             try {
-              await api("/api/v1/auth/staff/verify-otp", {
-                method: "POST",
+              await api('/api/v1/auth/staff/verify-otp', {
+                method: 'POST',
                 body: JSON.stringify({ email, code }),
               });
               setSignedIn(true);
-              setError("");
+              setError('');
             } catch (e) {
               setError(String(e));
             }
@@ -142,15 +135,15 @@ export default function EditorialWorkspace() {
       <main className="border border-line bg-white p-[clamp(1.25rem,4vw,3rem)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs font-bold uppercase tracking-widest text-accent">
-            {postId ? `Draft · ${saveState}` : "New critique"}
+            {postId ? `Draft · ${saveState}` : 'New critique'}
           </p>
           <div className="flex gap-2">
             {!postId ? (
               <button
                 className="bg-ink px-4 py-2 text-sm text-white"
                 onClick={async () => {
-                  const p = await api("/api/v1/posts", {
-                    method: "POST",
+                  const p = await api('/api/v1/posts', {
+                    method: 'POST',
                     body: JSON.stringify({
                       title,
                       excerpt,
@@ -169,8 +162,8 @@ export default function EditorialWorkspace() {
                   className="border border-line px-4 py-2 text-sm"
                   onClick={() =>
                     api(`/api/v1/posts/${postId}/checkpoint`, {
-                      method: "POST",
-                      body: JSON.stringify({ reason: "manual checkpoint" }),
+                      method: 'POST',
+                      body: JSON.stringify({ reason: 'manual checkpoint' }),
                     })
                   }
                 >
@@ -180,8 +173,8 @@ export default function EditorialWorkspace() {
                   className="bg-accent px-4 py-2 text-sm text-white"
                   onClick={() =>
                     api(`/api/v1/posts/${postId}/publish`, {
-                      method: "POST",
-                      body: "{}",
+                      method: 'POST',
+                      body: '{}',
                     })
                   }
                 >
@@ -196,7 +189,7 @@ export default function EditorialWorkspace() {
           value={title}
           onChange={(e) => {
             setTitle(e.target.value);
-            setSaveState("waiting");
+            setSaveState('waiting');
           }}
         />
         <textarea
@@ -205,19 +198,16 @@ export default function EditorialWorkspace() {
           value={excerpt}
           onChange={(e) => {
             setExcerpt(e.target.value);
-            setSaveState("waiting");
+            setSaveState('waiting');
           }}
         />
         <div className="mt-6 flex flex-wrap gap-2 border-y border-line py-3">
           {[
-            ["Bold", () => editor?.chain().focus().toggleBold().run()],
-            [
-              "Heading",
-              () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
-            ],
-            ["Quote", () => editor?.chain().focus().toggleBlockquote().run()],
-            ["List", () => editor?.chain().focus().toggleBulletList().run()],
-            ["Code", () => editor?.chain().focus().toggleCodeBlock().run()],
+            ['Bold', () => editor?.chain().focus().toggleBold().run()],
+            ['Heading', () => editor?.chain().focus().toggleHeading({ level: 2 }).run()],
+            ['Quote', () => editor?.chain().focus().toggleBlockquote().run()],
+            ['List', () => editor?.chain().focus().toggleBulletList().run()],
+            ['Code', () => editor?.chain().focus().toggleCodeBlock().run()],
           ].map(([label, action]) => (
             <button
               key={String(label)}

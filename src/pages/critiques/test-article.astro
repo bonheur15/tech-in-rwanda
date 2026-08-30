@@ -1,0 +1,176 @@
+---
+import SiteFooter from "../../components/SiteFooter.astro";
+import SiteHeader from "../../components/SiteHeader.astro";
+import "../../styles/global.css";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta
+      name="description"
+      content="A demonstration critique showing how a confusing online form can be made clearer, more accessible, and easier to complete."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>What a broken form teaches us about usable design | Tech in Rwanda</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#article-content">Skip to article</a>
+    <SiteHeader />
+
+    <main class="article-page" id="article-content">
+      <header class="article-hero">
+        <a class="back-link" href="/#stories">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8H3m4-4L3 8l4 4" /></svg>
+          All critiques
+        </a>
+        <p class="eyebrow">Demonstration critique · UX teardown</p>
+        <h1>What a broken public-service form teaches us about usable design</h1>
+        <p class="article-deck">
+          A form can technically work and still fail the people using it. This test article examines
+          five common points of friction and turns each one into a practical design improvement.
+        </p>
+        <div class="article-byline">
+          <p><span>Written by</span> Tech in Rwanda</p>
+          <p><span>Published</span> <time datetime="2026-08-30">30 August 2026</time></p>
+          <p><span>Reading time</span> 8 minutes</p>
+        </div>
+      </header>
+
+      <figure class="article-visual">
+        <div class="form-window" aria-hidden="true">
+          <div class="window-bar"><span></span><span></span><span></span></div>
+          <div class="form-sketch">
+            <span class="sketch-title"></span>
+            <span class="sketch-copy"></span>
+            <span class="sketch-field field-error"></span>
+            <span class="sketch-error"></span>
+            <span class="sketch-field"></span>
+            <span class="sketch-button"></span>
+          </div>
+          <span class="issue-marker marker-one">1</span>
+          <span class="issue-marker marker-two">2</span>
+          <span class="issue-marker marker-three">3</span>
+        </div>
+        <figcaption>A representative form used to demonstrate recurring interface problems.</figcaption>
+      </figure>
+
+      <div class="article-layout">
+        <aside class="article-aside" aria-label="Article summary">
+          <p class="aside-label">In this critique</p>
+          <ol>
+            <li><a href="#problem">The core problem</a></li>
+            <li><a href="#friction">Where the form creates friction</a></li>
+            <li><a href="#repair">A better approach</a></li>
+            <li><a href="#standard">The wider standard</a></li>
+          </ol>
+          <p class="test-note"><strong>Testing note</strong>This is representative sample content. It does not describe a named organization or live service.</p>
+        </aside>
+
+        <article class="article-body">
+          <p class="lead">
+            The worst forms rarely look completely broken. They load. Their inputs accept text. A
+            button eventually sends something somewhere. The failure appears in the gap between
+            technical completion and human understanding.
+          </p>
+
+          <section id="problem">
+            <p class="section-number">01</p>
+            <h2>The core problem</h2>
+            <p>
+              People arrive at a public-service form with a specific goal. They may need a document,
+              an appointment, or permission to continue an important process. The interface should
+              reduce uncertainty. Too often it adds more.
+            </p>
+            <p>
+              A weak form asks for unfamiliar information without explaining why, marks errors only
+              after submission, and clears useful work when something goes wrong. None of these
+              failures is visually dramatic. Together, they make the service feel unreliable.
+            </p>
+            <blockquote>
+              <p>A working submit button is not the same as a usable service.</p>
+            </blockquote>
+          </section>
+
+          <section id="friction">
+            <p class="section-number">02</p>
+            <h2>Where the form creates friction</h2>
+            <p>
+              The first issue is language. Labels written for the database or internal office process
+              force the visitor to translate the system before answering. Plain labels, short examples,
+              and a sentence explaining unusual requests can remove that burden.
+            </p>
+
+            <div class="finding">
+              <span class="finding-index">01</span>
+              <div>
+                <h3>The form hides its requirements</h3>
+                <p>Required documents and accepted formats appear only after an upload fails.</p>
+              </div>
+              <p class="finding-fix"><span>Fix</span>Show requirements before the visitor starts.</p>
+            </div>
+            <div class="finding">
+              <span class="finding-index">02</span>
+              <div>
+                <h3>Errors arrive without a recovery path</h3>
+                <p>A red border signals a problem but does not explain what changed or how to continue.</p>
+              </div>
+              <p class="finding-fix"><span>Fix</span>Name the error and place guidance beside the field.</p>
+            </div>
+            <div class="finding">
+              <span class="finding-index">03</span>
+              <div>
+                <h3>Progress is invisible</h3>
+                <p>Visitors cannot tell how much work remains or whether they can return later.</p>
+              </div>
+              <p class="finding-fix"><span>Fix</span>Show scope, progress, and save behavior from the start.</p>
+            </div>
+          </section>
+
+          <section id="repair">
+            <p class="section-number">03</p>
+            <h2>A better approach</h2>
+            <p>
+              Start by writing the journey in the visitor's language. State the outcome, list what is
+              needed, and divide the form only where the steps match a real change in the task. Keep
+              completed information safe when validation or the network fails.
+            </p>
+            <div class="repair-list">
+              <p><span>Before starting</span>Explain the outcome, documents, time, and cost.</p>
+              <p><span>While completing</span>Use familiar labels, useful defaults, and visible progress.</p>
+              <p><span>When errors happen</span>Preserve input and explain exactly how to recover.</p>
+              <p><span>After submission</span>Confirm what happened and what the visitor should expect next.</p>
+            </div>
+          </section>
+
+          <section id="standard">
+            <p class="section-number">04</p>
+            <h2>The wider standard</h2>
+            <p>
+              Better forms do more than improve completion rates. They communicate respect. They tell
+              people that their time, data, and attention matter. That should be the baseline for every
+              digital service built for the public.
+            </p>
+            <p>
+              The useful question is not whether the page shipped. It is whether someone can understand
+              it, complete it, recover from a mistake, and trust what happens next.
+            </p>
+          </section>
+
+          <footer class="article-end">
+            <p class="eyebrow">End of demonstration critique</p>
+            <h2>Good criticism should leave a path forward.</h2>
+            <a class="primary-link" href="/#stories">
+              Return to all critiques
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" /></svg>
+            </a>
+          </footer>
+        </article>
+      </div>
+    </main>
+
+    <SiteFooter />
+  </body>
+</html>

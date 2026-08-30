@@ -1,5 +1,5 @@
 export async function GET({ url }: { url: URL }) {
-  const origin = import.meta.env.INTERNAL_API_URL ?? url.origin;
+  const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? url.origin;
   const response = await fetch(`${origin}/api/v1/public/posts?limit=50`);
   const posts = response.ok ? (await response.json()).data : [];
   const escape = (v: string) => v.replace(/[<>&'"]/g, (c) => ({"<":"&lt;",">":"&gt;","&":"&amp;","'":"&apos;",'"':"&quot;"}[c]!));

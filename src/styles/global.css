@@ -492,17 +492,16 @@ h1 {
 }
 
 .article-hero {
-  max-width: 68rem;
+  max-width: 76rem;
   margin-inline: auto;
-  padding-block: clamp(4rem, 8vw, 7.5rem) clamp(3.5rem, 6vw, 5.5rem);
-  text-align: center;
+  padding-block: clamp(2.5rem, 5vw, 4.5rem) clamp(3.5rem, 6vw, 5rem);
 }
 
 .back-link {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  margin-block-end: clamp(3rem, 6vw, 5rem);
+  margin-block-end: clamp(2.5rem, 4vw, 3.75rem);
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
@@ -521,31 +520,47 @@ h1 {
   stroke-linejoin: round;
 }
 
-.article-hero .eyebrow {
-  margin-block-end: 1.4rem;
+.article-heading-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
+  gap: clamp(3rem, 7vw, 7rem);
+  align-items: end;
+}
+
+.article-title-block .eyebrow {
+  margin-block-end: 1.25rem;
 }
 
 .article-hero h1 {
-  max-width: 14ch;
-  margin-inline: auto;
-  font-size: clamp(3.15rem, 6vw, 6rem);
+  max-width: 13ch;
+  margin-block-end: 0;
+  font-size: clamp(3.5rem, 4.8vw, 5.35rem);
   line-height: 0.98;
 }
 
+.article-intro-panel {
+  padding-block-start: 1.5rem;
+  border-block-start: 3px solid var(--accent);
+}
+
 .article-deck {
-  max-width: 45rem;
-  margin: 0 auto 2.5rem;
+  max-width: 31rem;
+  margin: 0 0 2rem;
   color: var(--muted);
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-size: clamp(1.02rem, 1.35vw, 1.18rem);
   line-height: 1.65;
 }
 
 .article-byline {
-  display: flex;
-  justify-content: center;
-  gap: clamp(1.5rem, 4vw, 3.5rem);
-  padding-block-start: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.5rem;
+  padding-block-start: 1.25rem;
   border-top: 1px solid var(--line);
+}
+
+.article-byline p:first-child {
+  grid-column: 1 / -1;
 }
 
 .article-byline p {
@@ -968,9 +983,29 @@ h1 {
     padding-block-start: 3rem;
   }
 
+  .article-heading-grid {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+
   .article-hero h1 {
     max-width: 15ch;
     font-size: clamp(3rem, 8vw, 4.25rem);
+  }
+
+  .article-intro-panel {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 2rem;
+  }
+
+  .article-deck {
+    margin-block-end: 0;
+  }
+
+  .article-byline {
+    padding-block-start: 0;
+    border-top: 0;
   }
 
   .article-layout {
@@ -1031,7 +1066,17 @@ h1 {
   .article-byline {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    padding-block-start: 1.25rem;
+    border-top: 1px solid var(--line);
     text-align: start;
+  }
+
+  .article-intro-panel {
+    display: block;
+  }
+
+  .article-deck {
+    margin-block-end: 2rem;
   }
 
   .article-byline p:first-child {

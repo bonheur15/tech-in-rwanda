@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"rwandafreespace.com/blog/backend/internal/platform/requestmeta"
@@ -43,7 +45,7 @@ func CORS(allowed map[string]struct{}) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
 			if origin != "" {
-				if _, ok := allowed[origin]; !ok {
+				if _, ok := allowed[origin]; !ok && !sameHostOrigin(origin, r.Host) {
 					http.Error(w, "origin not allowed", http.StatusForbidden)
 					return
 				}
@@ -53,13 +55,18 @@ func CORS(allowed map[string]struct{}) Middleware {
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			}
 
-			if r.Method == http.MethodOptions && r.URL.Path[:min(len(r.URL.Path), len("/api/"))] == "/api/" {
+			if r.Method == http.MethodOptions && strings.HasPrefix(r.URL.Path, "/api/") {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func sameHostOrigin(origin, host string) bool {
+	parsed, err := url.Parse(origin)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host == host
 }
 
 func Recover(logger *slog.Logger) Middleware {

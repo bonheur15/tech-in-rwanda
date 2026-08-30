@@ -44,6 +44,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/reader/onboarding", a.withMutation(a.onboard))
 	mux.HandleFunc("GET /api/v1/public/posts", a.publicPosts)
 	mux.HandleFunc("GET /api/v1/public/posts/{slug}", a.publicPost)
+	mux.HandleFunc("GET /api/v1/search", a.search)
 	mux.HandleFunc("POST /api/v1/posts", a.withMutation(a.createPost))
 	mux.HandleFunc("GET /api/v1/posts/{id}/draft", a.withActor(a.getDraft))
 	mux.HandleFunc("PUT /api/v1/posts/{id}/draft", a.withMutation(a.saveDraft))
@@ -51,6 +52,9 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/posts/{id}/submit", a.withMutation(a.submit))
 	mux.HandleFunc("POST /api/v1/posts/{id}/publish", a.withMutation(a.publish))
 	mux.HandleFunc("POST /api/v1/posts/{id}/fork", a.withMutation(a.fork))
+	mux.HandleFunc("GET /api/v1/posts/{id}/versions", a.withActor(a.versions))
+	mux.HandleFunc("POST /api/v1/posts/{id}/restore/{version}", a.withMutation(a.restoreVersion))
+	mux.HandleFunc("DELETE /api/v1/posts/{id}", a.withMutation(a.deletePost))
 	mux.HandleFunc("POST /api/v1/reviews/{id}/approve", a.withMutation(func(w http.ResponseWriter, r *http.Request, actor auth.Actor) { a.review(w, r, actor, true) }))
 	mux.HandleFunc("POST /api/v1/reviews/{id}/reject", a.withMutation(func(w http.ResponseWriter, r *http.Request, actor auth.Actor) { a.review(w, r, actor, false) }))
 	mux.HandleFunc("POST /api/v1/articles/{id}/bookmarks", a.withMutation(a.bookmark))
@@ -266,6 +270,106 @@ func (a *API) publish(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 func (a *API) fork(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	p, err := a.Editorial.Fork(r.Context(), x, r.PathValue("id"))
 	respond(w, r, p, err, 201)
+}
+
+func (a *API) versions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if _, err := a.Editorial.GetDraft(r.Context(), x, r.PathValue("id")); err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT id,number,title,excerpt,reason,created_by,created_at FROM post_versions WHERE post_id=? ORDER BY number DESC LIMIT 100", r.PathValue("id"))
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, title, excerpt, reason, by, at string
+		var number int
+		if err = rows.Scan(&id, &number, &title, &excerpt, &reason, &by, &at); err != nil {
+			respond(w, r, nil, err, 0)
+			return
+		}
+		out = append(out, map[string]any{"id": id, "number": number, "title": title, "excerpt": excerpt, "reason": reason, "createdBy": by, "createdAt": at})
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+func (a *API) restoreVersion(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	p, err := a.Editorial.GetDraft(r.Context(), x, r.PathValue("id"))
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	var title, excerpt, content string
+	if err = a.DB.QueryRowContext(r.Context(), "SELECT title,excerpt,content_json FROM post_versions WHERE id=? AND post_id=?", r.PathValue("version"), p.ID).Scan(&title, &excerpt, &content); err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	saved, err := a.Editorial.Save(r.Context(), x, p.ID, title, excerpt, json.RawMessage(content), p.Revision)
+	if err == nil {
+		_, err = a.Editorial.Checkpoint(r.Context(), x, p.ID, "restore")
+	}
+	respond(w, r, saved, err, http.StatusOK)
+}
+
+func (a *API) deletePost(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	var in struct{ Title, Confirmation, Reason string }
+	if decode(r, &in) != nil || in.Confirmation != "permanently delete" {
+		httpx.Failure(w, r, 400, "confirmation_required", "Type the title and permanently delete")
+		return
+	}
+	var title, owner string
+	var ever bool
+	if err := a.DB.QueryRowContext(r.Context(), "SELECT title,owner_id,ever_published FROM posts WHERE id=?", r.PathValue("id")).Scan(&title, &owner, &ever); err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	if in.Title != title || (ever && x.Role != "superadmin") || (!ever && x.Role != "superadmin" && owner != x.IdentityID) {
+		respond(w, r, nil, auth.ErrUnauthorized, 0)
+		return
+	}
+	tx, err := a.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer tx.Rollback()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = tx.ExecContext(r.Context(), "DELETE FROM posts WHERE id=?", r.PathValue("id"))
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), "INSERT INTO audit_events(actor_id,action,object_type,object_id,detail_json,ip_address,created_at) VALUES(?,'post.deleted','post',?,?,?,?)", x.IdentityID, r.PathValue("id"), `{"reason":`+strconv.Quote(in.Reason)+`}`, auth.ClientIP(r), now)
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	respond(w, r, map[string]bool{"deleted": err == nil}, err, http.StatusOK)
+}
+
+func (a *API) search(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		httpx.JSON(w, 200, []any{})
+		return
+	}
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT p.id,p.title,p.slug,p.excerpt,p.published_at FROM post_search s JOIN posts p ON p.id=s.post_id WHERE post_search MATCH ? AND p.state='published' ORDER BY rank LIMIT 30", q)
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, title, slug, excerpt string
+		var at *string
+		if err = rows.Scan(&id, &title, &slug, &excerpt, &at); err != nil {
+			respond(w, r, nil, err, 0)
+			return
+		}
+		out = append(out, map[string]any{"id": id, "title": title, "slug": slug, "excerpt": excerpt, "publishedAt": at})
+	}
+	httpx.JSON(w, 200, out)
 }
 func (a *API) review(w http.ResponseWriter, r *http.Request, x auth.Actor, approve bool) {
 	var in struct{ Reason string }

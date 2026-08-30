@@ -1,13 +1,10 @@
 export async function GET({ url }: { url: URL }) {
-  const origin =
-    process.env.INTERNAL_API_URL ??
-    import.meta.env.INTERNAL_API_URL ??
-    url.origin;
+  const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? url.origin;
   const response = await fetch(`${origin}/api/v1/public/posts?limit=50`);
   const posts = response.ok ? (await response.json()).data : [];
-  const urls = ["/", ...posts.map((p: any) => `/critiques/${p.slug}/`)];
+  const urls = ['/', ...posts.map((p: any) => `/critiques/${p.slug}/`)];
   return new Response(
-    `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((path) => `<url><loc>${url.origin}${path}</loc></url>`).join("")}</urlset>`,
-    { headers: { "Content-Type": "application/xml; charset=utf-8" } },
+    `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((path) => `<url><loc>${url.origin}${path}</loc></url>`).join('')}</urlset>`,
+    { headers: { 'Content-Type': 'application/xml; charset=utf-8' } },
   );
 }

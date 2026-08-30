@@ -1,5 +1,7 @@
 ---
 import "../styles/global.css";
+import SiteFooter from "../components/SiteFooter.astro";
+import SiteHeader from "../components/SiteHeader.astro";
 
 const stories = [
   {
@@ -50,25 +52,7 @@ const stories = [
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
 
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="Tech in Rwanda home">
-        <span class="brand-mark" aria-hidden="true">TR</span>
-        <span>Tech in Rwanda</span>
-      </a>
-
-      <nav aria-label="Primary navigation">
-        <a href="#stories">Critiques</a>
-        <a href="#topics">Subjects</a>
-        <a href="#about">Purpose</a>
-      </nav>
-
-      <a class="subscribe-link" href="mailto:hello@techinrwanda.com?subject=Send%20me%20new%20critiques">
-        Get new critiques
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M3 8h10M9 4l4 4-4 4" />
-        </svg>
-      </a>
-    </header>
+    <SiteHeader />
 
     <main id="main-content">
       <section class="hero" aria-labelledby="hero-title">
@@ -108,13 +92,13 @@ const stories = [
             <p class="eyebrow">Observed, tested, explained</p>
             <h2 id="stories-title">Latest critiques</h2>
           </div>
-          <a href="#all-critiques">View all critiques</a>
+          <a href="/critiques/test-article/">Open test article</a>
         </div>
 
         <div class="story-grid">
           {stories.map((story, index) => (
             <article class="story-card">
-              <a href={`#story-${index + 1}`} aria-label={`Read: ${story.title}`}>
+              <a href="/critiques/test-article/" aria-label={`Read: ${story.title}`}>
                 <div class:list={["story-visual", `tone-${story.tone}`]}>
                   <span>{String(index + 1).padStart(2, "0")}</span>
                   <svg viewBox="0 0 320 190" aria-hidden="true">
@@ -160,13 +144,6 @@ const stories = [
       </section>
     </main>
 
-    <footer>
-      <a class="brand footer-brand" href="/">
-        <span class="brand-mark" aria-hidden="true">TR</span>
-        <span>Tech in Rwanda</span>
-      </a>
-      <p>Documenting what is broken and how to make it better.</p>
-      <p>© 2026 Tech in Rwanda</p>
-    </footer>
+    <SiteFooter />
   </body>
 </html>

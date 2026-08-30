@@ -2,12 +2,12 @@ SHELL := /bin/bash
 
 GO ?= go
 NPM ?= npm
-BINARY := bin/rwanda-free-space
+BINARY := bin/rfs-api
 IMAGE ?= rwanda-free-space:local
 
 .DEFAULT_GOAL := help
 
-.PHONY: help dev generate generate-check format format-check test test-go test-web vet check build web-build api-build smoke docker-build docker-run clean
+.PHONY: help dev generate generate-check format format-check test test-go test-web vet check build web-build api-build cli migrate-status bootstrap-superadmin backup verify-backup smoke docker-build docker-run clean
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; printf "Rwanda Free Space commands\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -52,6 +52,22 @@ api-build: ## Build the production Go binary
 	@mkdir -p bin
 	@CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o $(BINARY) ./backend/cmd/api
 
+cli: ## Build the operational CLI
+	@mkdir -p bin
+	@CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o bin/blogctl ./backend/cmd/blogctl
+
+migrate-status: ## Show applied database migrations
+	@$(GO) run ./backend/cmd/blogctl migrate-status
+
+bootstrap-superadmin: ## Bootstrap idempotently: make bootstrap-superadmin EMAIL=x HANDLE=x NAME=x
+	@$(GO) run ./backend/cmd/blogctl bootstrap-superadmin "$(EMAIL)" "$(HANDLE)" "$(NAME)"
+
+backup: ## Create a consistent backup: make backup FILE=backup.tar.gz
+	@$(GO) run ./backend/cmd/blogctl backup "$(FILE)"
+
+verify-backup: ## Verify backup checksums: make verify-backup FILE=backup.tar.gz
+	@$(GO) run ./backend/cmd/blogctl verify-backup "$(FILE)"
+
 smoke: build ## Run the compiled site and API smoke test
 	@./scripts/smoke.sh
 
@@ -59,7 +75,7 @@ docker-build: ## Build the optimized production image
 	@docker build --pull -t $(IMAGE) .
 
 docker-run: ## Run the production container on port 8080
-	@docker run --rm -p 8080:8080 $(IMAGE)
+	@docker run --rm -p 8080:8080 -v rfs-data:/data --env-file .env $(IMAGE)
 
 clean: ## Remove local build output
-	@rm -rf bin dist
+	@rm -rf bin dist .astro

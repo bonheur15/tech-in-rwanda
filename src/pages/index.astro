@@ -3,30 +3,30 @@ import "../styles/global.css";
 
 const stories = [
   {
-    category: "Startups",
-    title: "The founders building Rwanda’s next generation of digital services",
+    category: "UX teardown",
+    title: "What a broken public-service form teaches us about usable design",
     summary:
-      "A closer look at the small teams turning local problems into focused, useful technology.",
+      "The confusing fields, missing feedback, and dead ends that make a simple online task harder—and a practical way to rebuild it.",
     date: "30 August 2026",
     datetime: "2026-08-30",
     readTime: "6 min read",
     tone: "red",
   },
   {
-    category: "Infrastructure",
-    title: "What better connectivity means beyond Kigali",
+    category: "Product critique",
+    title: "A checkout that asks too much and explains too little",
     summary:
-      "New access is changing how businesses work, students learn, and communities share information.",
+      "We trace where trust disappears in a local shopping flow and show the smaller decisions that would make it feel reliable.",
     date: "28 August 2026",
     datetime: "2026-08-28",
     readTime: "5 min read",
     tone: "ink",
   },
   {
-    category: "People",
-    title: "Inside a growing community of Rwandan software makers",
+    category: "Accessibility",
+    title: "The Rwandan websites that forget keyboard users",
     summary:
-      "Meet the developers creating tools, teaching peers, and shaping a more connected ecosystem.",
+      "A plain-language look at invisible focus, unreachable menus, and fixes that improve the experience for everyone.",
     date: "25 August 2026",
     datetime: "2026-08-25",
     readTime: "7 min read",
@@ -42,10 +42,10 @@ const stories = [
     <meta name="viewport" content="width=device-width" />
     <meta
       name="description"
-      content="Independent stories about technology, builders, and digital progress in Rwanda."
+      content="Constructive critiques of broken websites, products, and digital experiences in Rwanda—with practical ideas for fixing them."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>Tech in Rwanda — Ideas, builders, and progress</title>
+    <title>Tech in Rwanda — Honest critiques of local digital products</title>
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -57,13 +57,13 @@ const stories = [
       </a>
 
       <nav aria-label="Primary navigation">
-        <a href="#stories">Stories</a>
-        <a href="#topics">Topics</a>
-        <a href="#about">About</a>
+        <a href="#stories">Critiques</a>
+        <a href="#topics">Subjects</a>
+        <a href="#about">Purpose</a>
       </nav>
 
-      <a class="subscribe-link" href="mailto:hello@techinrwanda.com?subject=Newsletter%20signup">
-        Subscribe
+      <a class="subscribe-link" href="mailto:hello@techinrwanda.com?subject=Send%20me%20new%20critiques">
+        Get new critiques
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M3 8h10M9 4l4 4-4 4" />
         </svg>
@@ -73,14 +73,14 @@ const stories = [
     <main id="main-content">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow">Independent technology journal</p>
-          <h1 id="hero-title">The people shaping Rwanda’s digital future.</h1>
+          <p class="eyebrow">Constructive criticism for Rwandan tech</p>
+          <h1 id="hero-title">Good technology starts with honest criticism.</h1>
           <p class="hero-intro">
-            Thoughtful reporting on the builders, ideas, and systems moving Rwanda’s technology
-            ecosystem forward.
+            We document broken websites, frustrating products, and weak design decisions in Rwanda—then
+            explain what went wrong and how they could be better.
           </p>
           <a class="primary-link" href="#stories">
-            Read the latest stories
+            Read the latest critiques
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path d="M3 8h10M9 4l4 4-4 4" />
             </svg>
@@ -95,17 +95,17 @@ const stories = [
             <circle cx="363" cy="129" r="57" />
             <path class="art-grid" d="M363 53v152M287 129h152M310 76l107 107M310 183 417 76" />
           </svg>
-          <p>Ideas rooted here.<br />Built for everywhere.</p>
+          <p>Find the friction.<br />Explain the fix.</p>
         </div>
       </section>
 
       <section class="stories" id="stories" aria-labelledby="stories-title">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Fresh perspectives</p>
-            <h2 id="stories-title">Latest stories</h2>
+            <p class="eyebrow">Observed, tested, explained</p>
+            <h2 id="stories-title">Latest critiques</h2>
           </div>
-          <a href="#all-stories">View all stories</a>
+          <a href="#all-critiques">View all critiques</a>
         </div>
 
         <div class="story-grid">
@@ -135,23 +135,24 @@ const stories = [
 
       <section class="topics" id="topics" aria-labelledby="topics-title">
         <div>
-          <p class="eyebrow">Explore the ecosystem</p>
-          <h2 id="topics-title">Stories with context,<br />not just headlines.</h2>
+          <p class="eyebrow">What we examine</p>
+          <h2 id="topics-title">Criticism that points<br />toward a better product.</h2>
         </div>
         <ul>
-          <li><a href="#startups"><span>01</span>Startups &amp; business</a></li>
-          <li><a href="#policy"><span>02</span>Policy &amp; infrastructure</a></li>
-          <li><a href="#people"><span>03</span>People &amp; community</a></li>
-          <li><a href="#research"><span>04</span>Research &amp; ideas</a></li>
+          <li><a href="#websites"><span>01</span>Websites &amp; online forms</a></li>
+          <li><a href="#products"><span>02</span>Apps &amp; digital products</a></li>
+          <li><a href="#accessibility"><span>03</span>Accessibility &amp; inclusion</a></li>
+          <li><a href="#public-tech"><span>04</span>Public digital services</a></li>
         </ul>
       </section>
 
       <section class="about" id="about" aria-labelledby="about-title">
-        <p class="eyebrow">About the journal</p>
-        <h2 id="about-title">Technology deserves local perspective.</h2>
+        <p class="eyebrow">Why this blog exists</p>
+        <h2 id="about-title">Critique the work, improve the standard.</h2>
         <p>
-          Tech in Rwanda is an independent publication documenting the work, questions, and people
-          behind the country’s technology ecosystem. We value useful reporting over noise.
+          Tech in Rwanda independently documents where local digital experiences fail the people using
+          them. The goal is not ridicule. Each critique identifies the problem, explains its impact, and
+          offers a realistic path toward a clearer, more accessible, and more trustworthy product.
         </p>
       </section>
     </main>
@@ -161,7 +162,7 @@ const stories = [
         <span class="brand-mark" aria-hidden="true">TR</span>
         <span>Tech in Rwanda</span>
       </a>
-      <p>Independent stories on technology in Rwanda.</p>
+      <p>Documenting what is broken—and how to make it better.</p>
       <p>© 2026 Tech in Rwanda</p>
     </footer>
   </body>

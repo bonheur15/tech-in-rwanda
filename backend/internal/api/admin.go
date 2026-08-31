@@ -88,9 +88,15 @@ func (a *API) adminOverview(w http.ResponseWriter, r *http.Request, x auth.Actor
 		queryArgs := args
 		if x.Role != "superadmin" {
 			switch key {
-			case "reviews": q += " AND submitted_by=?"; queryArgs = []any{x.IdentityID}
-			case "media": q += " AND owner_id=?"; queryArgs = []any{x.IdentityID}
-			case "comments": counts[key] = 0; continue
+			case "reviews":
+				q += " AND submitted_by=?"
+				queryArgs = []any{x.IdentityID}
+			case "media":
+				q += " AND owner_id=?"
+				queryArgs = []any{x.IdentityID}
+			case "comments":
+				counts[key] = 0
+				continue
 			}
 		} else if key == "reviews" || key == "comments" || key == "media" {
 			queryArgs = nil
@@ -137,7 +143,10 @@ func (a *API) adminReviews(w http.ResponseWriter, r *http.Request, x auth.Actor)
 	}
 	query := "SELECT d.id,d.post_id,d.version_id,d.status,d.created_at,p.title,s.display_name FROM review_decisions d JOIN posts p ON p.id=d.post_id JOIN staff_profiles s ON s.identity_id=d.submitted_by WHERE d.status='pending'"
 	args := []any{}
-	if x.Role != "superadmin" { query += " AND d.submitted_by=?"; args = append(args, x.IdentityID) }
+	if x.Role != "superadmin" {
+		query += " AND d.submitted_by=?"
+		args = append(args, x.IdentityID)
+	}
 	query += " ORDER BY d.created_at"
 	rows, err := a.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
@@ -347,13 +356,19 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request, x auth.Actor
 	}
 	if err == nil && in.AvatarAssetID != "" {
 		var owner, status string
-		if err = tx.QueryRowContext(r.Context(), "SELECT owner_id,status FROM media_assets WHERE id=?", in.AvatarAssetID).Scan(&owner, &status); err == nil && owner != x.IdentityID && status != "public" && x.Role != "superadmin" { err = auth.ErrUnauthorized }
+		if err = tx.QueryRowContext(r.Context(), "SELECT owner_id,status FROM media_assets WHERE id=?", in.AvatarAssetID).Scan(&owner, &status); err == nil && owner != x.IdentityID && status != "public" && x.Role != "superadmin" {
+			err = auth.ErrUnauthorized
+		}
 	}
 	if err == nil {
 		_, err = tx.ExecContext(r.Context(), "UPDATE staff_profiles SET handle=?,display_name=?,bio=?,avatar_asset_id=CASE WHEN ?='' THEN avatar_asset_id ELSE ? END,updated_at=? WHERE identity_id=?", in.Handle, strings.TrimSpace(in.DisplayName), strings.TrimSpace(in.Bio), in.AvatarAssetID, in.AvatarAssetID, now, x.IdentityID)
 	}
-	if err == nil && in.AvatarAssetID != "" { _, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='public' WHERE id=?", in.AvatarAssetID) }
-	if err == nil && oldAvatar != nil && in.AvatarAssetID != "" && *oldAvatar != in.AvatarAssetID { _, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='orphaned',orphaned_at=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?) AND NOT EXISTS(SELECT 1 FROM staff_profiles WHERE avatar_asset_id=?)", now, *oldAvatar, *oldAvatar, *oldAvatar, *oldAvatar) }
+	if err == nil && in.AvatarAssetID != "" {
+		_, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='public' WHERE id=?", in.AvatarAssetID)
+	}
+	if err == nil && oldAvatar != nil && in.AvatarAssetID != "" && *oldAvatar != in.AvatarAssetID {
+		_, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='orphaned',orphaned_at=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?) AND NOT EXISTS(SELECT 1 FROM staff_profiles WHERE avatar_asset_id=?)", now, *oldAvatar, *oldAvatar, *oldAvatar, *oldAvatar)
+	}
 	if err == nil {
 		err = tx.Commit()
 	}

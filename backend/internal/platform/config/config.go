@@ -49,6 +49,12 @@ func Load() (Config, error) {
 		if cfg.MailMode != "smtp" {
 			return Config{}, fmt.Errorf("production requires MAIL_MODE=smtp")
 		}
+		if cfg.SMTPAddress == "" || cfg.SMTPFrom == "" || cfg.SMTPUsername == "" || cfg.SMTPPassword == "" {
+			return Config{}, fmt.Errorf("production requires complete SMTP configuration")
+		}
+		if !strings.HasPrefix(cfg.PublicOrigin, "https://") {
+			return Config{}, fmt.Errorf("production PUBLIC_ORIGIN must use HTTPS")
+		}
 		if cfg.TurnstileSecret == "" || cfg.TurnstileSecret == "1x0000000000000000000000000000000AA" {
 			return Config{}, fmt.Errorf("production requires a non-test TURNSTILE_SECRET")
 		}

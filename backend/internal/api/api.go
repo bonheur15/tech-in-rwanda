@@ -26,14 +26,15 @@ import (
 )
 
 type API struct {
-	DB          *sql.DB
-	Auth        *auth.Service
-	Editorial   *editorial.Service
-	Logger      *slog.Logger
-	Origin      string
-	MediaDir    string
-	MailMode    string
-	Development bool
+	DB             *sql.DB
+	Auth           *auth.Service
+	Editorial      *editorial.Service
+	Logger         *slog.Logger
+	Origin         string
+	AllowedOrigins map[string]struct{}
+	MediaDir       string
+	MailMode       string
+	Development    bool
 }
 
 func (a *API) Routes() http.Handler {
@@ -140,7 +141,7 @@ func actorKindForRequest(r *http.Request) string {
 func (a *API) withMutation(next handler) http.HandlerFunc {
 	return a.withActor(func(w http.ResponseWriter, r *http.Request, actor auth.Actor) {
 		origin := strings.TrimRight(r.Header.Get("Origin"), "/")
-		if origin != "" && origin != a.Origin {
+		if !a.originAllowed(origin) {
 			httpx.Failure(w, r, 403, "invalid_origin", "The request origin is not allowed")
 			return
 		}
@@ -177,6 +178,14 @@ func (a *API) withMutation(next handler) http.HandlerFunc {
 		}
 		next(w, r, actor)
 	})
+}
+
+func (a *API) originAllowed(origin string) bool {
+	if origin == "" || origin == a.Origin {
+		return true
+	}
+	_, ok := a.AllowedOrigins[origin]
+	return ok
 }
 
 type captureResponse struct {
@@ -607,7 +616,7 @@ func respond(w http.ResponseWriter, r *http.Request, data any, err error, status
 	httpx.Failure(w, r, code, "request_failed", err.Error())
 }
 func (a *API) bookmark(w http.ResponseWriter, r *http.Request, x auth.Actor) {
-	if x.Kind != "reader" {
+	if x.Kind != "reader" || x.Status != "active" {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}
@@ -615,10 +624,18 @@ func (a *API) bookmark(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	respond(w, r, map[string]bool{"bookmarked": true}, err, 200)
 }
 func (a *API) unbookmark(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if x.Kind != "reader" || x.Status != "active" {
+		respond(w, r, nil, auth.ErrUnauthorized, 0)
+		return
+	}
 	_, err := a.DB.ExecContext(r.Context(), "DELETE FROM bookmarks WHERE reader_id=? AND post_id=?", x.IdentityID, r.PathValue("id"))
 	respond(w, r, map[string]bool{"bookmarked": false}, err, 200)
 }
 func (a *API) bookmarks(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if x.Kind != "reader" || x.Status != "active" {
+		respond(w, r, nil, auth.ErrUnauthorized, 0)
+		return
+	}
 	rows, err := a.DB.QueryContext(r.Context(), "SELECT p.id,p.title,p.slug,p.excerpt FROM bookmarks b JOIN posts p ON p.id=b.post_id WHERE b.reader_id=? ORDER BY b.created_at DESC", x.IdentityID)
 	if err != nil {
 		respond(w, r, nil, err, 0)
@@ -661,7 +678,7 @@ func (a *API) comments(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, out)
 }
 func (a *API) addComment(w http.ResponseWriter, r *http.Request, x auth.Actor) {
-	if x.Kind != "reader" {
+	if x.Kind != "reader" || x.Status != "active" {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}
@@ -671,6 +688,19 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	}
 	if decode(r, &in) != nil || len(strings.TrimSpace(in.Body)) < 2 || len(in.Body) > 3000 {
 		httpx.Failure(w, r, 400, "invalid_comment", "Comment must be 2 to 3000 characters")
+		return
+	}
+	var recent int
+	window := time.Now().UTC().Add(-10 * time.Minute).Format(time.RFC3339Nano)
+	if err := a.DB.QueryRowContext(r.Context(), "SELECT count(*) FROM comments WHERE reader_id=? AND created_at>=?", x.IdentityID, window).Scan(&recent); err != nil || recent >= 5 {
+		httpx.Failure(w, r, 429, "comment_rate_limited", "Please wait before posting another comment")
+		return
+	}
+	normalizedBody := strings.ToLower(strings.TrimSpace(in.Body))
+	var duplicate int
+	_ = a.DB.QueryRowContext(r.Context(), "SELECT count(*) FROM comments c JOIN comment_versions v ON v.id=c.pending_version_id WHERE c.reader_id=? AND c.post_id=? AND lower(trim(v.body))=? AND c.created_at>=?", x.IdentityID, r.PathValue("id"), normalizedBody, window).Scan(&duplicate)
+	if duplicate > 0 {
+		httpx.Failure(w, r, 409, "duplicate_comment", "This comment was already submitted")
 		return
 	}
 	depth := 0

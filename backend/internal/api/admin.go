@@ -84,7 +84,13 @@ func (a *API) adminOverview(w http.ResponseWriter, r *http.Request, x auth.Actor
 	for key, q := range map[string]string{"drafts": "SELECT count(*) FROM posts WHERE state IN('draft','frozen')" + ownerClause, "published": "SELECT count(*) FROM posts WHERE state='published'" + ownerClause, "reviews": "SELECT count(*) FROM review_decisions WHERE status='pending'", "comments": "SELECT count(*) FROM comments WHERE status='pending'", "media": "SELECT count(*) FROM media_assets WHERE status='draft'"} {
 		var n int
 		queryArgs := args
-		if key == "reviews" || key == "comments" || key == "media" {
+		if x.Role != "superadmin" {
+			switch key {
+			case "reviews": q += " AND submitted_by=?"; queryArgs = []any{x.IdentityID}
+			case "media": q += " AND owner_id=?"; queryArgs = []any{x.IdentityID}
+			case "comments": counts[key] = 0; continue
+			}
+		} else if key == "reviews" || key == "comments" || key == "media" {
 			queryArgs = nil
 		}
 		_ = a.DB.QueryRowContext(r.Context(), q, queryArgs...).Scan(&n)
@@ -127,7 +133,11 @@ func (a *API) adminReviews(w http.ResponseWriter, r *http.Request, x auth.Actor)
 	if !requireStaff(w, r, x) {
 		return
 	}
-	rows, err := a.DB.QueryContext(r.Context(), "SELECT d.id,d.post_id,d.version_id,d.status,d.created_at,p.title,s.display_name FROM review_decisions d JOIN posts p ON p.id=d.post_id JOIN staff_profiles s ON s.identity_id=d.submitted_by WHERE d.status='pending' ORDER BY d.created_at")
+	query := "SELECT d.id,d.post_id,d.version_id,d.status,d.created_at,p.title,s.display_name FROM review_decisions d JOIN posts p ON p.id=d.post_id JOIN staff_profiles s ON s.identity_id=d.submitted_by WHERE d.status='pending'"
+	args := []any{}
+	if x.Role != "superadmin" { query += " AND d.submitted_by=?"; args = append(args, x.IdentityID) }
+	query += " ORDER BY d.created_at"
+	rows, err := a.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
@@ -355,8 +365,8 @@ func (a *API) attachMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		respond(w, r, nil, err, 0)
 		return
 	}
-	var owner string
-	if err = a.DB.QueryRowContext(r.Context(), "SELECT owner_id FROM media_assets WHERE id=?", r.PathValue("asset")).Scan(&owner); err != nil || (owner != x.IdentityID && x.Role != "superadmin") {
+	var owner, status string
+	if err = a.DB.QueryRowContext(r.Context(), "SELECT owner_id,status FROM media_assets WHERE id=?", r.PathValue("asset")).Scan(&owner, &status); err != nil || (owner != x.IdentityID && status != "public" && x.Role != "superadmin") {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}

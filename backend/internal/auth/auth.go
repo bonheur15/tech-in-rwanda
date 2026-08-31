@@ -27,6 +27,7 @@ const StaffCSRFCookie = "__Host-rfs_staff_csrf"
 const ReaderCSRFCookie = "__Host-rfs_reader_csrf"
 
 var ErrUnauthorized = errors.New("unauthorized")
+var ErrDelivery = errors.New("OTP delivery failed")
 
 type Actor struct{ IdentityID, Kind, Role, PublishMode, Status, CSRF string }
 type Mailer interface {
@@ -173,11 +174,16 @@ func (s *Service) RequestOTP(ctx context.Context, kind, email, ip, turnstile str
 	if err != nil {
 		return err
 	}
-	_, err = s.DB.ExecContext(ctx, "INSERT INTO otp_challenges(id,identity_kind,email,code_digest,expires_at,created_at) VALUES(?,?,?,?,?,?)", uuid.NewString(), kind, normalized, Digest(s.OTPPepper, code), now.Add(10*time.Minute).Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+	challengeID := uuid.NewString()
+	_, err = s.DB.ExecContext(ctx, "INSERT INTO otp_challenges(id,identity_kind,email,code_digest,expires_at,created_at) VALUES(?,?,?,?,?,?)", challengeID, kind, normalized, Digest(s.OTPPepper, code), now.Add(10*time.Minute).Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
 	if err != nil {
 		return err
 	}
-	return s.Mailer.SendOTP(ctx, normalized, code)
+	if err = s.Mailer.SendOTP(ctx, normalized, code); err != nil {
+		_, _ = s.DB.ExecContext(ctx, "DELETE FROM otp_challenges WHERE id=?", challengeID)
+		return fmt.Errorf("%w: %v", ErrDelivery, err)
+	}
+	return nil
 }
 func (s *Service) applyReaderLimits(ctx context.Context, email, ip string) error {
 	now := s.now()

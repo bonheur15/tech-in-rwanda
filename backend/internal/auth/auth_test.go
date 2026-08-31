@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,12 @@ type captureMailer struct{ code string }
 func (m *captureMailer) SendOTP(_ context.Context, _ string, code string) error {
 	m.code = code
 	return nil
+}
+
+type failingMailer struct{}
+
+func (failingMailer) SendOTP(context.Context, string, string) error {
+	return errors.New("SMTP offline")
 }
 
 func TestStaffOTPCreatesUsableOpaqueSession(t *testing.T) {
@@ -103,6 +110,55 @@ func TestDevelopmentTurnstileIsExplicit(t *testing.T) {
 	}
 	if err := verifier.Verify(context.Background(), "anything-else", "127.0.0.1"); err == nil {
 		t.Fatal("unexpected development token accepted")
+	}
+}
+
+func TestDeliveryFailureRemovesUnusableChallenge(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "delivery.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 8, 31, 2, 0, 0, 0, time.UTC)
+	service := &Service{DB: db, OTPPepper: "otp", SessionPepper: "session", Mailer: failingMailer{}, Turnstile: DevelopmentVerifier{}, Now: func() time.Time { return now }}
+	if err = service.RequestOTP(ctx, "reader", "reader@example.com", "127.0.0.1", "rfs-development-turnstile"); !errors.Is(err, ErrDelivery) {
+		t.Fatalf("err=%v", err)
+	}
+	var count int
+	if err = db.QueryRow("SELECT count(*) FROM otp_challenges").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("challenges=%d err=%v", count, err)
+	}
+}
+
+func TestOTPExpiryAttemptsAndPersistentRateLimits(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "limits.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 8, 31, 3, 0, 0, 0, time.UTC)
+	mailer := &captureMailer{}
+	service := &Service{DB: db, OTPPepper: "otp", SessionPepper: "session", Mailer: mailer, Turnstile: DevelopmentVerifier{}, Now: func() time.Time { return now }}
+	if err = service.RequestOTP(ctx, "reader", "limits@example.com", "127.0.0.1", "rfs-development-turnstile"); err != nil {
+		t.Fatal(err)
+	}
+	for range 5 {
+		_, _, _, _ = service.VerifyOTP(ctx, "reader", "limits@example.com", "000000", "browser", "127.0.0.1")
+	}
+	if _, _, _, err = service.VerifyOTP(ctx, "reader", "limits@example.com", mailer.code, "browser", "127.0.0.1"); err == nil {
+		t.Fatal("accepted code after five failed attempts")
+	}
+	now = now.Add(time.Hour)
+	for i := 0; i < 3; i++ {
+		if err = service.RequestOTP(ctx, "reader", "rate@example.com", "127.0.0.2", "rfs-development-turnstile"); err != nil {
+			t.Fatal(err)
+		}
+		now = now.Add(time.Minute)
+	}
+	if err = service.RequestOTP(ctx, "reader", "rate@example.com", "127.0.0.2", "rfs-development-turnstile"); err == nil {
+		t.Fatal("email hourly limit did not persist")
 	}
 }
 func TestUsername(t *testing.T) {

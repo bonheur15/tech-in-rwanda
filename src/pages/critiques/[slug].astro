@@ -10,7 +10,12 @@ if (response.status === 404) return Astro.redirect('/404');
 const payload = await response.json();
 const post = payload.data;
 const blocks = Array.isArray(post?.content?.content) ? post.content.content : [];
-const words = JSON.stringify(post?.content ?? {}).split(/\s+/).length;
+const collectText = (node: any): string =>
+  `${node?.text ?? ''} ${(node?.content ?? []).map(collectText).join(' ')}`;
+const words = collectText(post?.content ?? {})
+  .trim()
+  .split(/\s+/)
+  .filter(Boolean).length;
 const readTime = Math.max(1, Math.ceil(words / 220));
 ---
 

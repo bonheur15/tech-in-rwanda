@@ -222,15 +222,15 @@ const eyebrow = 'm-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] t
         <ul class="m-0 list-none border-t border-[#475049] p-0">
           {
             [
-              ["01", "Websites & online forms", "websites"],
-              ["02", "Apps & digital products", "products"],
+              ["01", "Websites & online forms", "ux-teardown"],
+              ["02", "Apps & digital products", "product-critique"],
               ["03", "Accessibility & inclusion", "accessibility"],
               ["04", "Public digital services", "public-tech"],
             ].map(([number, label, anchor]) => (
               <li class="border-b border-[#475049]">
                 <a
                   class="flex min-h-18 items-center gap-5 no-underline hover:text-[#f6b0a8]"
-                  href={`#${anchor}`}
+                  href={`/categories/${anchor}/`}
                 >
                   <>
                     <span class="text-[0.68rem] text-[#969b96]">{number}</span>

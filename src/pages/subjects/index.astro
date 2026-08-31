@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
+const [categoryResponse, tagResponse] = await Promise.all([
+  fetch(`${origin}/api/v1/categories`),
+  fetch(`${origin}/api/v1/tags`),
+]);
+const categories = categoryResponse.ok ? (await categoryResponse.json()).data : [];
+const tags = tagResponse.ok ? (await tagResponse.json()).data : [];
+---
+<BaseLayout title="Subjects | Rwanda Free Space" description="Explore Rwanda Free Space critiques by subject and tag.">
+  <main id="main-content" class="mx-auto max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(4rem,8vw,8rem)]">
+    <p class="text-xs font-bold uppercase tracking-widest text-accent">Browse the archive</p>
+    <h1 class="mt-4 max-w-4xl font-display text-[clamp(3.5rem,8vw,7rem)] leading-none">Subjects worth examining.</h1>
+    <div class="mt-14 grid gap-px border border-line bg-line md:grid-cols-2">
+      {categories.map((category: any) => <a href={`/categories/${category.slug}/`} class="bg-canvas p-7 hover:bg-white"><p class="text-xs font-bold uppercase tracking-widest text-muted">{category.postCount} critiques</p><h2 class="mt-3 font-display text-4xl">{category.name}</h2><p class="mt-3 text-muted">{category.description}</p></a>)}
+    </div>
+    {tags.length > 0 && <section class="mt-14 border-t border-line pt-8"><h2 class="font-display text-4xl">Tags</h2><div class="mt-5 flex flex-wrap gap-3">{tags.map((tag: any) => <a href={`/tags/${tag.slug}/`} class="border border-line px-4 py-2 text-sm font-semibold">#{tag.name} <span class="text-muted">{tag.postCount}</span></a>)}</div></section>}
+  </main>
+</BaseLayout>

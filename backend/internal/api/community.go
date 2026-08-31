@@ -60,7 +60,15 @@ func (a *API) publicReader(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, _ := a.DB.QueryContext(r.Context(), "SELECT c.id,v.body,p.title,p.slug,c.created_at FROM comments c JOIN comment_versions v ON v.id=c.public_version_id JOIN posts p ON p.id=c.post_id WHERE c.reader_id=? AND c.status='approved' ORDER BY c.created_at DESC LIMIT 50", identity)
 	comments := []map[string]string{}
-	if rows != nil { defer rows.Close(); for rows.Next() { var id, body, title, slug, created string; if rows.Scan(&id,&body,&title,&slug,&created)==nil { comments=append(comments,map[string]string{"id":id,"body":body,"postTitle":title,"postSlug":slug,"createdAt":created}) } } }
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id, body, title, slug, created string
+			if rows.Scan(&id, &body, &title, &slug, &created) == nil {
+				comments = append(comments, map[string]string{"id": id, "body": body, "postTitle": title, "postSlug": slug, "createdAt": created})
+			}
+		}
+	}
 	httpx.JSON(w, 200, map[string]any{"username": username, "avatar": avatar, "joinedAt": joined, "emailVisible": visible, "email": email, "comments": comments})
 }
 

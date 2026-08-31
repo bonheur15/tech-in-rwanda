@@ -29,7 +29,7 @@ The newsroom includes drafts with two-second last-save-wins autosave, manual che
 - Published pages read immutable versions through `published_version_id`; autosave can never alter the live article.
 - Uploads accept decoded JPEG/PNG only, enforce 15 MiB and 30 MP limits, strip metadata by re-encoding, and create four responsive derivatives.
 
-Run `make check` for generated-client drift, formatting, vet, race tests, frontend tests, Astro checks, and production builds. Run `make smoke` for the compiled two-process topology.
+Run `make check` for generated-client drift, formatting, vet, race tests, frontend tests, Astro checks, production builds, the compiled two-process smoke test, and Docker acceptance. Docker must be available for this complete gate. Use `make smoke` alone for a faster local check of the compiled two-process topology.
 
 ## Operations
 

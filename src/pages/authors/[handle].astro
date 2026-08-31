@@ -8,4 +8,4 @@ if (!response.ok) return Astro.redirect('/404');
 const author = (await response.json()).data;
 if (author.handle !== handle) return Astro.redirect(`/authors/${author.handle}/`, 301);
 ---
-<BaseLayout title={`${author.displayName} | Rwanda Free Space`} description={author.bio}><main id="main-content" class="mx-auto max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(4rem,8vw,8rem)]"><StoryList eyebrow={`@${author.handle}`} title={author.displayName} description={author.bio||'Critiques published on Rwanda Free Space.'} posts={author.posts}/></main></BaseLayout>
+<BaseLayout title={`${author.displayName} | Rwanda Free Space`} description={author.bio}><main id="main-content" class="mx-auto max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(4rem,8vw,8rem)]">{author.avatar && <img src={author.avatar} alt="" class="mb-6 size-24 rounded-full object-cover"/>}<StoryList eyebrow={`@${author.handle}`} title={author.displayName} description={author.bio||'Critiques published on Rwanda Free Space.'} posts={author.posts}/></main></BaseLayout>

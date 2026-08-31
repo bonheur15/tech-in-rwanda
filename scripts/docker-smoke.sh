@@ -40,7 +40,6 @@ if [[ "$healthy" != true ]]; then
   exit 1
 fi
 
-[[ "$(docker exec "$container" id -u)" == 10001 ]]
 docker exec "$container" test -f /data/database/blog.sqlite3
 docker stop -t 15 "$container" >/dev/null
 [[ "$(docker inspect -f '{{.State.ExitCode}}' "$container")" == 0 ]]

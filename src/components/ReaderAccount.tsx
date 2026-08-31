@@ -201,10 +201,17 @@ function Onboarding({ done }: { done: () => void }) {
 
 function ReaderHome({ me }: { me: any }) {
   const [bookmarks, setBookmarks] = useState<any[]>([]),
-    [sessions, setSessions] = useState<any[]>([]);
+    [sessions, setSessions] = useState<any[]>([]),
+    [comments, setComments] = useState<any[]>([]),
+    [avatar, setAvatar] = useState(me.avatar),
+    [emailVisible, setEmailVisible] = useState(Boolean(me.emailVisible)),
+    [deletionMode, setDeletionMode] = useState('preserve'),
+    [confirmation, setConfirmation] = useState(''),
+    [message, setMessage] = useState('');
   useEffect(() => {
     api('/api/v1/bookmarks').then(setBookmarks);
     api('/api/v1/sessions?kind=reader').then(setSessions);
+    api('/api/v1/reader/comments').then(setComments);
   }, []);
   return (
     <>
@@ -257,7 +264,102 @@ function ReaderHome({ me }: { me: any }) {
             ))}
           </div>
         </section>
+        <section className="border border-line bg-white p-6">
+          <h2 className="font-display text-3xl">Your comments</h2>
+          <div className="mt-5 grid gap-4">
+            {comments.length ? (
+              comments.map((comment) => (
+                <article key={comment.id} className="border-t border-line pt-3 text-sm">
+                  <a href={`/critiques/${comment.slug}/`} className="font-semibold">
+                    {comment.title}
+                  </a>
+                  <p className="mt-1 line-clamp-2 text-muted">{comment.body}</p>
+                  <span className="mt-2 inline-block uppercase tracking-wider text-accent">
+                    {comment.status}
+                  </span>
+                </article>
+              ))
+            ) : (
+              <p className="text-muted">You have not commented yet.</p>
+            )}
+          </div>
+        </section>
+        <section className="border border-line bg-white p-6">
+          <h2 className="font-display text-3xl">Profile preferences</h2>
+          <label className="mt-5 block text-sm font-semibold">
+            Avatar
+            <select
+              value={avatar}
+              onChange={(e) => setAvatar(e.target.value)}
+              className="mt-2 w-full border border-line bg-white p-3"
+            >
+              {['sunrise', 'hills', 'ink', 'agaseke', 'volcano', 'coffee'].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-4 flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={emailVisible}
+              onChange={(e) => setEmailVisible(e.target.checked)}
+            />{' '}
+            Show my email on my public reader profile
+          </label>
+          <button
+            onClick={async () => {
+              await api('/api/v1/reader/profile', {
+                method: 'PATCH',
+                body: JSON.stringify({ avatar, emailVisible }),
+              });
+              setMessage('Profile preferences saved.');
+            }}
+            className="mt-5 bg-ink px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            Save profile
+          </button>
+        </section>
       </div>
+      <details className="mt-10 border border-red-300 bg-red-50 p-6">
+        <summary className="cursor-pointer font-semibold text-red-800">
+          Delete reader account
+        </summary>
+        <p className="mt-4 max-w-2xl text-sm text-red-900">
+          Choose whether approved comments remain under an anonymous deleted-reader identity, or
+          whether their bodies become [deleted] tombstones.
+        </p>
+        <select
+          value={deletionMode}
+          onChange={(e) => setDeletionMode(e.target.value)}
+          className="mt-4 border border-red-300 bg-white p-3 text-sm"
+        >
+          <option value="preserve">Preserve approved comments anonymously</option>
+          <option value="tombstone">Replace my comment bodies with [deleted]</option>
+        </select>
+        <label className="mt-4 block max-w-sm text-sm font-semibold">
+          Type “delete my account”
+          <input
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+            className="mt-2 w-full border border-red-300 bg-white p-3"
+          />
+        </label>
+        <button
+          disabled={confirmation !== 'delete my account'}
+          onClick={async () => {
+            if (!confirm('Permanently delete this reader account?')) return;
+            await api('/api/v1/reader/account', {
+              method: 'DELETE',
+              body: JSON.stringify({ mode: deletionMode, confirmation }),
+            });
+            location.href = '/';
+          }}
+          className="mt-4 bg-red-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+        >
+          Permanently delete account
+        </button>
+      </details>
+      {message && <p className="mt-5 text-sm text-accent">{message}</p>}
       <button
         onClick={async () => {
           await api('/api/v1/auth/logout?kind=reader', { method: 'POST', body: '{}' });

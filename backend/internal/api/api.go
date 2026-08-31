@@ -44,6 +44,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/me", a.withActor(a.me))
 	mux.HandleFunc("POST /api/v1/auth/logout", a.withMutation(a.logout))
 	mux.HandleFunc("GET /api/v1/sessions", a.withActor(a.sessions))
+	mux.HandleFunc("DELETE /api/v1/sessions", a.withMutation(a.revokeOtherSessions))
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", a.withMutation(a.revokeSession))
 	mux.HandleFunc("POST /api/v1/reader/onboarding", a.withMutation(a.onboard))
 	mux.HandleFunc("PATCH /api/v1/reader/profile", a.withMutation(a.updateReaderProfile))
@@ -147,8 +148,48 @@ func (a *API) withMutation(next handler) http.HandlerFunc {
 			httpx.Failure(w, r, 403, "invalid_csrf", "The CSRF token is invalid")
 			return
 		}
+		key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+		if key != "" && idempotentMutation(r.URL.Path) {
+			if len(key) > 128 {
+				httpx.Failure(w, r, 400, "invalid_idempotency_key", "Idempotency key is too long")
+				return
+			}
+			var status int
+			var body string
+			if err := a.DB.QueryRowContext(r.Context(), "SELECT response_status,response_json FROM idempotency_keys WHERE identity_id=? AND operation=? AND key=? AND response_json IS NOT NULL", actor.IdentityID, r.URL.Path, key).Scan(&status, &body); err == nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Idempotency-Replayed", "true")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(body))
+				return
+			}
+			recorder := &captureResponse{header: make(http.Header), status: 200}
+			next(recorder, r, actor)
+			for name, values := range recorder.header {
+				w.Header()[name] = values
+			}
+			w.WriteHeader(recorder.status)
+			_, _ = w.Write(recorder.body.Bytes())
+			if recorder.status >= 200 && recorder.status < 300 {
+				_, _ = a.DB.ExecContext(r.Context(), "INSERT OR IGNORE INTO idempotency_keys(identity_id,operation,key,response_status,response_json,created_at)VALUES(?,?,?,?,?,?)", actor.IdentityID, r.URL.Path, key, recorder.status, recorder.body.String(), time.Now().UTC().Format(time.RFC3339Nano))
+			}
+			return
+		}
 		next(w, r, actor)
 	})
+}
+
+type captureResponse struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+}
+
+func (w *captureResponse) Header() http.Header            { return w.header }
+func (w *captureResponse) Write(body []byte) (int, error) { return w.body.Write(body) }
+func (w *captureResponse) WriteHeader(status int)         { w.status = status }
+func idempotentMutation(path string) bool {
+	return strings.Contains(path, "/publish") || strings.Contains(path, "/fork") || strings.HasSuffix(path, "/comments") || path == "/api/v1/media"
 }
 func decode(r *http.Request, v any) error {
 	d := json.NewDecoder(io.LimitReader(r.Body, 3<<20))
@@ -228,6 +269,25 @@ func (a *API) sessions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 func (a *API) revokeSession(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	a.DB.ExecContext(r.Context(), "UPDATE sessions SET revoked_at=? WHERE id=? AND identity_id=?", time.Now().UTC().Format(time.RFC3339Nano), r.PathValue("id"), x.IdentityID)
 	httpx.JSON(w, 200, map[string]bool{"revoked": true})
+}
+func (a *API) revokeOtherSessions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	var current []byte
+	names := []string{auth.StaffCookie, "rfs_staff_session"}
+	if x.Kind == "reader" {
+		names = []string{auth.ReaderCookie, "rfs_reader_session"}
+	}
+	for _, name := range names {
+		if cookie, err := r.Cookie(name); err == nil {
+			current = auth.Digest(a.Auth.SessionPepper, cookie.Value)
+			break
+		}
+	}
+	result, err := a.DB.ExecContext(r.Context(), "UPDATE sessions SET revoked_at=? WHERE identity_id=? AND kind=? AND revoked_at IS NULL AND token_digest<>?", time.Now().UTC().Format(time.RFC3339Nano), x.IdentityID, x.Kind, current)
+	count := int64(0)
+	if err == nil {
+		count, _ = result.RowsAffected()
+	}
+	respond(w, r, map[string]any{"revoked": count}, err, 200)
 }
 func (a *API) onboard(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	if x.Kind != "reader" {
@@ -360,7 +420,21 @@ func (a *API) publicPost(w http.ResponseWriter, r *http.Request) {
 		httpx.Failure(w, r, 500, "database_error", "Could not load article")
 		return
 	}
-	httpx.JSON(w, 200, p)
+	var authorName, authorHandle, categoryName, categorySlug string
+	var sourceSlug, thumbnail *string
+	_ = a.DB.QueryRowContext(r.Context(), "SELECT s.display_name,s.handle,COALESCE(c.name,''),COALESCE(c.slug,''),(SELECT slug FROM posts WHERE id=p.source_post_id),(SELECT '/media/'||m.content_hash||'/large.jpg' FROM media_assets m WHERE m.id=p.thumbnail_asset_id) FROM posts p JOIN staff_profiles s ON s.identity_id=p.owner_id LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=?", p.ID).Scan(&authorName, &authorHandle, &categoryName, &categorySlug, &sourceSlug, &thumbnail)
+	tagRows, _ := a.DB.QueryContext(r.Context(), "SELECT t.name,t.slug FROM tags t JOIN post_tags pt ON pt.tag_id=t.id WHERE pt.post_id=? ORDER BY t.name", p.ID)
+	tags := []map[string]string{}
+	if tagRows != nil {
+		defer tagRows.Close()
+		for tagRows.Next() {
+			var name, slug string
+			if tagRows.Scan(&name, &slug) == nil {
+				tags = append(tags, map[string]string{"name": name, "slug": slug})
+			}
+		}
+	}
+	httpx.JSON(w, 200, map[string]any{"id": p.ID, "ownerId": p.OwnerID, "title": p.Title, "slug": p.Slug, "excerpt": p.Excerpt, "state": p.State, "content": p.Content, "publishedVersionId": p.PublishedVersionID, "sourcePostId": p.SourcePostID, "sourceSlug": sourceSlug, "publishedAt": p.PublishedAt, "author": authorName, "authorHandle": authorHandle, "category": categoryName, "categorySlug": categorySlug, "tags": tags, "thumbnail": thumbnail})
 }
 func (a *API) createPost(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	var in struct {
@@ -815,7 +889,24 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := uuid.NewString()
-	_, err = a.DB.ExecContext(r.Context(), "INSERT INTO media_assets(id,owner_id,content_hash,mime_type,width,height,bytes,alt_text,caption,credit,created_at)VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(content_hash) DO NOTHING", id, x.IdentityID, hash, mime, cfg.Width, cfg.Height, len(body), alt, r.FormValue("caption"), r.FormValue("credit"), now)
+	var focalX, focalY any
+	if raw := strings.TrimSpace(r.FormValue("focalX")); raw != "" {
+		value, parseErr := strconv.ParseFloat(raw, 64)
+		if parseErr != nil || value < 0 || value > 1 {
+			httpx.Failure(w, r, 400, "invalid_focal_point", "Focal coordinates must be between 0 and 1")
+			return
+		}
+		focalX = value
+	}
+	if raw := strings.TrimSpace(r.FormValue("focalY")); raw != "" {
+		value, parseErr := strconv.ParseFloat(raw, 64)
+		if parseErr != nil || value < 0 || value > 1 {
+			httpx.Failure(w, r, 400, "invalid_focal_point", "Focal coordinates must be between 0 and 1")
+			return
+		}
+		focalY = value
+	}
+	_, err = a.DB.ExecContext(r.Context(), "INSERT INTO media_assets(id,owner_id,content_hash,mime_type,width,height,bytes,alt_text,caption,credit,focal_x,focal_y,created_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(content_hash) DO NOTHING", id, x.IdentityID, hash, mime, cfg.Width, cfg.Height, len(body), alt, strings.TrimSpace(r.FormValue("caption")), strings.TrimSpace(r.FormValue("credit")), focalX, focalY, now)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
@@ -834,12 +925,29 @@ func (a *API) serveMedia(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	var status string
-	if a.DB.QueryRowContext(r.Context(), "SELECT status FROM media_assets WHERE content_hash=?", hash).Scan(&status) != nil || status != "public" {
+	var status, owner string
+	if a.DB.QueryRowContext(r.Context(), "SELECT status,owner_id FROM media_assets WHERE content_hash=?", hash).Scan(&status, &owner) != nil {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if status != "public" {
+		authorized := false
+		for _, name := range []string{auth.StaffCookie, "rfs_staff_session"} {
+			if cookie, err := r.Cookie(name); err == nil {
+				if actor, authErr := a.Auth.Authenticate(r.Context(), cookie.Value); authErr == nil && actor.Kind == "staff" && actor.Status == "active" && (actor.IdentityID == owner || actor.Role == "superadmin") {
+					authorized = true
+				}
+				break
+			}
+		}
+		if !authorized {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeFile(w, r, filepath.Join(a.MediaDir, hash, size+".jpg"))
 }

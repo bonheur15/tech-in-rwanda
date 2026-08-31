@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCommunity from '../../components/ArticleCommunity';
 const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
 const response = await fetch(
   `${origin}/api/v1/public/posts/${encodeURIComponent(Astro.params.slug ?? '')}`,
@@ -79,5 +80,6 @@ const readTime = Math.max(1, Math.ceil(words / 220));
         )
       }
     </article>
+    <ArticleCommunity postId={post.id} client:load />
   </main>
 </BaseLayout>

@@ -57,6 +57,11 @@ type SiteVerifier struct {
 	Secret string
 	Client *http.Client
 }
+type DevelopmentVerifier struct{}
+func (DevelopmentVerifier) Verify(_ context.Context, token, _ string) error {
+	if token != "rfs-development-turnstile" { return errors.New("development challenge failed") }
+	return nil
+}
 
 func (v SiteVerifier) Verify(ctx context.Context, token, ip string) error {
 	if token == "" {

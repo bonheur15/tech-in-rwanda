@@ -109,3 +109,12 @@ func TestAutosaveIsLastSaveWins(t *testing.T) {
 		t.Fatalf("latest=%+v", latest)
 	}
 }
+
+func TestDocumentValidationRejectsUnsafeRichContent(t *testing.T) {
+	unsafeImage := json.RawMessage(`{"type":"doc","content":[{"type":"image","attrs":{"src":"https://tracker.example/pixel.png","alt":"pixel","placement":"center"}}]}`)
+	badHeading := json.RawMessage(`{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"No H1"}]}]}`)
+	unsafeLink := json.RawMessage(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"click","marks":[{"type":"link","attrs":{"href":"javascript:alert(1)"}}]}]}]}`)
+	for _, document := range []json.RawMessage{unsafeImage, badHeading, unsafeLink} {
+		if ValidateDocument(document) == nil { t.Fatalf("unsafe document accepted: %s", document) }
+	}
+}

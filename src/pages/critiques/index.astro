@@ -2,7 +2,12 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StoryList from '../../components/StoryList.astro';
 const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
-const response = await fetch(`${origin}/api/v1/public/posts?limit=50`);
-const posts = response.ok ? (await response.json()).data : [];
+const cursor = Astro.url.searchParams.get('cursor') ?? '';
+const response = await fetch(
+  `${origin}/api/v1/public/posts?limit=24${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+);
+const payload = response.ok ? await response.json() : { data: [], meta: {} };
+const posts = payload.data;
+const nextCursor = payload.meta?.nextCursor;
 ---
-<BaseLayout title="Critique archive | Rwanda Free Space"><main id="main-content" class="mx-auto max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(4rem,8vw,8rem)]"><StoryList eyebrow="The archive" title="Every published critique." description="Careful observations, documented friction, and practical proposals for better technology in Rwanda." posts={posts}/></main></BaseLayout>
+<BaseLayout title="Critique archive | Rwanda Free Space"><main id="main-content" class="mx-auto max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(4rem,8vw,8rem)]"><StoryList eyebrow="The archive" title="Every published critique." description="Careful observations, documented friction, and practical proposals for better technology in Rwanda." posts={posts}/>{nextCursor && <a rel="next" href={`/critiques/?cursor=${encodeURIComponent(nextCursor)}`} class="mt-10 inline-block border border-ink px-5 py-3 font-semibold">Older critiques →</a>}</main></BaseLayout>

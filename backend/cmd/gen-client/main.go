@@ -7,12 +7,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+type contract struct{ Name, Method, Path string }
+var contracts = []contract{
+	{"health", "GET", "/api/v1/healthz"}, {"requestStaffOTP", "POST", "/auth/staff/request-otp"}, {"verifyStaffOTP", "POST", "/auth/staff/verify-otp"}, {"requestReaderOTP", "POST", "/auth/readers/request-otp"}, {"verifyReaderOTP", "POST", "/auth/readers/verify-otp"},
+	{"me", "GET", "/auth/me"}, {"readerMe", "GET", "/auth/me?kind=reader"}, {"logout", "POST", "/auth/logout"}, {"sessions", "GET", "/sessions"}, {"revokeOtherSessions", "DELETE", "/sessions?kind="}, {"revokeSession", "DELETE", "/sessions/"},
+	{"onboardReader", "POST", "/reader/onboarding"}, {"updateReaderProfile", "PATCH", "/reader/profile"}, {"readerComments", "GET", "/reader/comments"}, {"deleteReader", "DELETE", "/reader/account"},
+	{"listPosts", "GET", "/public/posts"}, {"getPost", "GET", "/public/posts/"}, {"search", "GET", "/search"}, {"categories", "GET", "/categories"}, {"createCategory", "POST", "/categories"}, {"tags", "GET", "/tags"}, {"createTag", "POST", "/tags"}, {"publicAuthor", "GET", "/public/authors/"}, {"publicReader", "GET", "/public/readers/"},
+	{"createPost", "POST", "/posts"}, {"getDraft", "GET", "/draft"}, {"saveDraft", "PUT", "/draft"}, {"updateMetadata", "PATCH", "/metadata"}, {"checkpoint", "POST", "/checkpoint"}, {"submit", "POST", "/submit"}, {"publish", "POST", "/publish"}, {"fork", "POST", "/fork"}, {"attachMedia", "POST", "/media/"}, {"versions", "GET", "/versions"}, {"restore", "POST", "/restore/"}, {"deletePost", "DELETE", "/posts/"},
+	{"approveReview", "POST", "/approve"}, {"rejectReview", "POST", "/reject"}, {"bookmark", "POST", "/bookmarks"}, {"unbookmark", "DELETE", "/bookmarks"}, {"bookmarks", "GET", "/bookmarks"}, {"comments", "GET", "/comments"}, {"comment", "POST", "/comments"}, {"editComment", "PATCH", "/comments/"}, {"reportComment", "POST", "/reports"},
+	{"moderateComment", "POST", "/admin/comments/"}, {"adminStaff", "GET", "/admin/staff"}, {"addStaff", "POST", "/admin/staff"}, {"updateStaff", "PATCH", "/admin/staff/"}, {"adminOverview", "GET", "/admin/overview"}, {"adminPosts", "GET", "/admin/posts"}, {"adminReviews", "GET", "/admin/reviews"}, {"adminComments", "GET", "/admin/comments"}, {"adminReports", "GET", "/admin/reports"}, {"resolveReport", "POST", "/resolve"}, {"adminMedia", "GET", "/admin/media"}, {"adminReaders", "GET", "/admin/readers"}, {"updateReaderStatus", "PATCH", "/admin/readers/"}, {"adminAudit", "GET", "/admin/audit"}, {"updateStaffProfile", "PATCH", "/account/profile"}, {"upload", "POST", "/media"},
+}
 
 func main() {
 	out := flag.String("out", "src/lib/api/generated.ts", "output")
 	check := flag.Bool("check", false, "check drift")
 	flag.Parse()
+	for _, route := range contracts {
+		if !strings.Contains(client, "\n "+route.Name+":") { panic("contract has no generated function: " + route.Name) }
+	}
 	body := []byte(client)
 	if *check {
 		old, err := os.ReadFile(*out)
@@ -43,12 +58,14 @@ function endpoint(path:string,base?:string){const root=base??(typeof window==="u
 export function invalidateTags(...tags:string[]){for(const [key,item] of cache)if(tags.some(tag=>item.tags.has(tag)))cache.delete(key)}
 export async function request<T>(method:string,path:string,body?:unknown,options:RequestOptions={},tags:string[]=[]):Promise<T>{const url=endpoint(path,options.baseUrl),key=method+":"+url;if(method==="GET"&&!options.forceRefresh){const hit=cache.get(key);if(hit&&hit.expires>Date.now())return hit.value as T;if(!options.signal&&pending.has(key))return pending.get(key) as Promise<T>}const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),options.timeoutMs??8000),abort=()=>controller.abort(options.signal?.reason);options.signal?.addEventListener("abort",abort,{once:true});const run=(async()=>{try{const multipart=body instanceof FormData;const response=await(options.fetch??fetch)(url,{method,credentials:"same-origin",headers:{Accept:"application/json",...(multipart?{}:{"Content-Type":"application/json"}),...(method==="GET"?{}:{"X-CSRF-Token":options.csrfToken??csrf(path)}),...(options.idempotencyKey?{"Idempotency-Key":options.idempotencyKey}:{})},body:body===undefined?undefined:multipart?body:JSON.stringify(body),signal:controller.signal,cache:path.includes("/auth/")||path.includes("/sessions")||path.includes("/draft")||path.includes("/admin/")?"no-store":"default"});const payload=await response.json().catch(()=>undefined);if(!response.ok){const e=payload?.error;throw new APIRequestError(e?.message??"API request failed",response.status,e?.code,e?.requestId)}if(!payload||!("data" in payload))throw new APIRequestError("Invalid API response",response.status,"invalid_response");if(method==="GET"&&(options.ttlMs??15000)>0)cache.set(key,{value:payload.data,expires:Date.now()+(options.ttlMs??15000),tags:new Set(tags)});if(method!=="GET")invalidateTags(...tags);return payload.data as T}catch(error){if(error instanceof APIRequestError)throw error;if(controller.signal.aborted)throw new APIRequestError("Request cancelled or timed out",0,"request_aborted");throw new APIRequestError(error instanceof Error?error.message:"Network request failed")}finally{clearTimeout(timer);options.signal?.removeEventListener("abort",abort);pending.delete(key)}})();if(method==="GET"&&!options.signal)pending.set(key,run);return run}
 export const api={
+ health:(o?:RequestOptions)=>request<{status:string}>("GET","/api/v1/healthz",undefined,{...o,ttlMs:0}),
  requestStaffOTP:(email:string,o?:RequestOptions)=>request<{accepted:boolean}>("POST","/api/v1/auth/staff/request-otp",{email},o),
  verifyStaffOTP:(email:string,code:string,o?:RequestOptions)=>request<{identityId:string;csrfToken:string}>("POST","/api/v1/auth/staff/verify-otp",{email,code},o),
  requestReaderOTP:(email:string,turnstileToken:string,o?:RequestOptions)=>request<{accepted:boolean}>("POST","/api/v1/auth/readers/request-otp",{email,turnstileToken},o),
  verifyReaderOTP:(email:string,code:string,o?:RequestOptions)=>request<{identityId:string;csrfToken:string}>("POST","/api/v1/auth/readers/verify-otp",{email,code},o),
  me:(o?:RequestOptions)=>request<Record<string,unknown>>("GET","/api/v1/auth/me",undefined,{...o,ttlMs:0}),
- logout:(o?:RequestOptions)=>request("POST","/api/v1/auth/logout",{},o),
+ readerMe:(o?:RequestOptions)=>request<Record<string,unknown>>("GET","/api/v1/auth/me?kind=reader",undefined,{...o,ttlMs:0}),
+ logout:(kind:"staff"|"reader"="staff",o?:RequestOptions)=>request("POST","/api/v1/auth/logout?kind="+kind,{},o),
  onboardReader:(input:{username:string;avatar:string;emailVisible:boolean},o?:RequestOptions)=>request("POST","/api/v1/reader/onboarding",input,o,["profile"]),
  deleteReader:(mode:"preserve"|"tombstone",confirmation:string,o?:RequestOptions)=>request("DELETE","/api/v1/reader/account",{mode,confirmation},o,["profile","bookmarks","comments"]),
  listPosts:(o?:RequestOptions)=>request<Post[]>("GET","/api/v1/public/posts",undefined,o,["archive"]),
@@ -64,14 +81,14 @@ export const api={
  attachMedia:(id:string,asset:string,placement:string,o?:RequestOptions)=>request("POST","/api/v1/posts/"+id+"/media/"+asset,{placement},o,["post:"+id,"media"]),
  publish:(id:string,o?:RequestOptions)=>request<{versionId:string}>("POST","/api/v1/posts/"+id+"/publish",{},o,["post:"+id,"archive"]),
  fork:(id:string,o?:RequestOptions)=>request<Post>("POST","/api/v1/posts/"+id+"/fork",{},o,["archive"]),
- sessions:(o?:RequestOptions)=>request<Session[]>("GET","/api/v1/sessions",undefined,{...o,ttlMs:0}),
+ sessions:(kind:"staff"|"reader"="staff",o?:RequestOptions)=>request<Session[]>("GET","/api/v1/sessions?kind="+kind,undefined,{...o,ttlMs:0}),
  revokeSession:(id:string,o?:RequestOptions)=>request("DELETE","/api/v1/sessions/"+id,{},o,["sessions"]),
  revokeOtherSessions:(kind:"staff"|"reader"="staff",o?:RequestOptions)=>request("DELETE","/api/v1/sessions?kind="+kind,{},o,["sessions"]),
  upload:(data:FormData,o?:RequestOptions)=>request<{id:string;src:string}>("POST","/api/v1/media",data,o,["media"]),
  bookmarks:(o?:RequestOptions)=>request<Post[]>("GET","/api/v1/bookmarks",undefined,{...o,ttlMs:0},["bookmarks"]),
  bookmark:(id:string,o?:RequestOptions)=>request("POST","/api/v1/articles/"+id+"/bookmarks",{},o,["bookmarks"]),
  unbookmark:(id:string,o?:RequestOptions)=>request("DELETE","/api/v1/articles/"+id+"/bookmarks",{},o,["bookmarks"]),
- comments:(id:string,o?:RequestOptions)=>request<unknown[]>("GET","/api/v1/articles/"+id+"/comments",undefined,o,["comments:"+id]),
+ comments:(id:string,o?:RequestOptions)=>request<unknown[]>("GET","/api/v1/articles/"+id+"/comments",undefined,{...o,ttlMs:0},["comments:"+id]),
  comment:(id:string,body:string,parentId:string|null,o?:RequestOptions)=>request("POST","/api/v1/articles/"+id+"/comments",{body,parentId},o,["comments:"+id]),
  editComment:(id:string,body:string,o?:RequestOptions)=>request("PATCH","/api/v1/comments/"+id,{body},o,["comments"]),
  reportComment:(id:string,reason:string,o?:RequestOptions)=>request("POST","/api/v1/comments/"+id+"/reports",{reason},o),

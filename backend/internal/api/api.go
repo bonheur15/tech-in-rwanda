@@ -202,7 +202,7 @@ func (w *captureResponse) Header() http.Header            { return w.header }
 func (w *captureResponse) Write(body []byte) (int, error) { return w.body.Write(body) }
 func (w *captureResponse) WriteHeader(status int)         { w.status = status }
 func idempotentMutation(path string) bool {
-	return strings.Contains(path, "/publish") || strings.Contains(path, "/fork") || strings.HasSuffix(path, "/comments") || path == "/api/v1/media"
+	return strings.Contains(path, "/publish") || strings.Contains(path, "/fork") || strings.HasSuffix(path, "/comments") || strings.Contains(path, "/media/") || path == "/api/v1/media"
 }
 func decode(r *http.Request, v any) error {
 	d := json.NewDecoder(io.LimitReader(r.Body, 3<<20))
@@ -404,7 +404,8 @@ func (a *API) tags(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) publicAuthor(w http.ResponseWriter, r *http.Request) {
 	var id, handle, name, bio string
-	err := a.DB.QueryRowContext(r.Context(), "SELECT s.identity_id,s.handle,s.display_name,s.bio FROM staff_profiles s WHERE s.handle=? OR s.identity_id=(SELECT identity_id FROM staff_handle_aliases WHERE handle=?)", r.PathValue("handle"), r.PathValue("handle")).Scan(&id, &handle, &name, &bio)
+	var avatar *string
+	err := a.DB.QueryRowContext(r.Context(), "SELECT s.identity_id,s.handle,s.display_name,s.bio,(SELECT '/media/'||m.content_hash||'/small.jpg' FROM media_assets m WHERE m.id=s.avatar_asset_id) FROM staff_profiles s WHERE s.handle=? OR s.identity_id=(SELECT identity_id FROM staff_handle_aliases WHERE handle=?)", r.PathValue("handle"), r.PathValue("handle")).Scan(&id, &handle, &name, &bio, &avatar)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
@@ -421,7 +422,7 @@ func (a *API) publicAuthor(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&postID, &title, &slug, &excerpt, &published)
 		posts = append(posts, map[string]any{"id": postID, "title": title, "slug": slug, "excerpt": excerpt, "publishedAt": published})
 	}
-	httpx.JSON(w, 200, map[string]any{"id": id, "handle": handle, "displayName": name, "bio": bio, "posts": posts})
+	httpx.JSON(w, 200, map[string]any{"id": id, "handle": handle, "displayName": name, "bio": bio, "avatar": avatar, "posts": posts})
 }
 func (a *API) publicPost(w http.ResponseWriter, r *http.Request) {
 	p, err := a.Editorial.Public(r.Context(), r.PathValue("slug"))

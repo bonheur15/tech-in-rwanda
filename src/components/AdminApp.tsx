@@ -729,6 +729,8 @@ function Editor({ me }: { me: Me }) {
         setTitle(p.title);
         setExcerpt(p.excerpt);
         setRevision(p.revision);
+        setCategory(p.categoryId ?? '');
+        setSelectedTags(p.tagIds ?? []);
         editor?.commands.setContent(p.content);
         setState('Saved');
         loadVersions(p.id);

@@ -107,7 +107,7 @@ func (s *Service) GetDraft(ctx context.Context, a auth.Actor, id string) (Post, 
 	p.Content = json.RawMessage(raw)
 	return p, nil
 }
-func (s *Service) Save(ctx context.Context, a auth.Actor, id, title, excerpt string, content json.RawMessage, expected int) (Post, error) {
+func (s *Service) Save(ctx context.Context, a auth.Actor, id, title, excerpt string, content json.RawMessage, _ int) (Post, error) {
 	if err := ValidateDocument(content); err != nil {
 		return Post{}, err
 	}
@@ -124,13 +124,13 @@ func (s *Service) Save(ctx context.Context, a auth.Actor, id, title, excerpt str
 		return Post{}, err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, "UPDATE post_drafts SET content_json=?,revision=revision+1,updated_at=? WHERE post_id=? AND revision=?", string(content), now, id, expected)
+	res, err := tx.ExecContext(ctx, "UPDATE post_drafts SET content_json=?,revision=revision+1,updated_at=? WHERE post_id=?", string(content), now, id)
 	if err != nil {
 		return Post{}, err
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return Post{}, errors.New("draft revision conflict")
+		return Post{}, sql.ErrNoRows
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE posts SET title=?,excerpt=?,updated_at=?,state=CASE WHEN state='in_review' THEN 'draft' ELSE state END WHERE id=?", title, excerpt, now, id); err != nil {
 		return Post{}, err

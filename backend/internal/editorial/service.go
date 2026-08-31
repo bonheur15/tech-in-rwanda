@@ -1,6 +1,7 @@
 package editorial
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -51,20 +52,36 @@ func ValidateDocument(raw json.RawMessage) error {
 	if len(raw) > 2<<20 {
 		return errors.New("document is too large")
 	}
-	var doc struct {
-		Type    string `json:"type"`
-		Content []struct {
-			Type string `json:"type"`
-		} `json:"content"`
-	}
-	if json.Unmarshal(raw, &doc) != nil || doc.Type != "doc" {
+	type mark struct { Type string `json:"type"`; Attrs map[string]any `json:"attrs,omitempty"` }
+	type node struct { Type string `json:"type"`; Text string `json:"text,omitempty"`; Attrs map[string]any `json:"attrs,omitempty"`; Marks []mark `json:"marks,omitempty"`; Content []json.RawMessage `json:"content,omitempty"` }
+	var root node
+	decoder := json.NewDecoder(bytes.NewReader(raw)); decoder.DisallowUnknownFields()
+	if decoder.Decode(&root) != nil || root.Type != "doc" {
 		return errors.New("content must be a TipTap document")
 	}
-	allowed := map[string]bool{"paragraph": true, "heading": true, "bulletList": true, "orderedList": true, "blockquote": true, "codeBlock": true, "horizontalRule": true, "image": true}
-	for _, b := range doc.Content {
-		if !allowed[b.Type] {
-			return fmt.Errorf("unsupported block %q", b.Type)
+	allowed := map[string]bool{"paragraph": true, "heading": true, "bulletList": true, "orderedList": true, "listItem": true, "blockquote": true, "codeBlock": true, "horizontalRule": true, "image": true, "text": true}
+	count := 0
+	var validate func(json.RawMessage, int) error
+	validate = func(body json.RawMessage, depth int) error {
+		count++; if count > 20_000 || depth > 20 { return errors.New("document structure is too complex") }
+		var current node
+		d := json.NewDecoder(bytes.NewReader(body)); d.DisallowUnknownFields()
+		if d.Decode(&current) != nil || !allowed[current.Type] { return fmt.Errorf("unsupported content node") }
+		if current.Type == "heading" { level, ok := current.Attrs["level"].(float64); if !ok || (level != 2 && level != 3) { return errors.New("only H2 and H3 headings are supported") } }
+		if current.Type == "image" {
+			src, _ := current.Attrs["src"].(string); alt, _ := current.Attrs["alt"].(string); placement, _ := current.Attrs["placement"].(string)
+			if !regexp.MustCompile(`^/media/[a-f0-9]{64}/(original|large|medium|small)\.jpg$`).MatchString(src) || strings.TrimSpace(alt) == "" { return errors.New("images require a managed media URL and alternative text") }
+			if placement != "" && !map[string]bool{"center":true,"wide":true,"full":true,"left":true,"right":true}[placement] { return errors.New("unsupported image placement") }
 		}
+		for _, m := range current.Marks {
+			if !map[string]bool{"bold":true,"italic":true,"code":true,"link":true}[m.Type] { return errors.New("unsupported text formatting") }
+			if m.Type == "link" { href, _ := m.Attrs["href"].(string); if !(strings.HasPrefix(href,"https://") || strings.HasPrefix(href,"http://") || strings.HasPrefix(href,"mailto:") || strings.HasPrefix(href,"/") || strings.HasPrefix(href,"#")) { return errors.New("unsupported link URL") } }
+		}
+		for _, child := range current.Content { if err := validate(child, depth+1); err != nil { return err } }
+		return nil
+	}
+	for _, child := range root.Content {
+		if err := validate(child, 1); err != nil { return err }
 	}
 	return nil
 }

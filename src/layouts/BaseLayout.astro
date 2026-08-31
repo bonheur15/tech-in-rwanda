@@ -7,15 +7,18 @@ interface Props {
   description?: string;
   image?: string;
   canonical?: string;
+  type?: 'website' | 'article';
 }
 const {
   title,
   description = 'Independent, constructive criticism of technology in Rwanda.',
   image = '/default-thumbnail.svg',
   canonical,
+  type = 'website',
 } = Astro.props;
 const canonicalURL =
   canonical ?? new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).toString();
+const imageURL = new URL(image, Astro.site ?? Astro.url.origin).toString();
 ---
 
 <!doctype html>
@@ -32,8 +35,8 @@ const canonicalURL =
       content={title}
     /><meta property="og:description" content={description} /><meta
       property="og:image"
-      content={image}
-    /><meta property="og:type" content="website" /><title>{title}</title></head
+      content={imageURL}
+    /><meta property="og:type" content={type} /><title>{title}</title></head
   ><body
     ><a
       class="fixed top-3 left-3 z-50 -translate-y-[160%] bg-ink px-4 py-2.5 text-canvas focus:translate-y-0"

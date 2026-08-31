@@ -1,8 +1,12 @@
 package auth
 
 import (
+	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -11,6 +15,100 @@ import (
 
 	"rwandafreespace.com/blog/backend/internal/platform/database"
 )
+
+func TestSMTPMailerUsesImplicitTLS(t *testing.T) {
+	certificateServer := httptest.NewTLSServer(nil)
+	certificate := certificateServer.TLS.Certificates[0]
+	roots := x509.NewCertPool()
+	roots.AddCert(certificateServer.Certificate())
+	certificateServer.Close()
+
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	received := make(chan string, 1)
+	serverErr := make(chan error, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			serverErr <- acceptErr
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		writer := bufio.NewWriter(conn)
+		write := func(response string) error {
+			if _, writeErr := writer.WriteString(response); writeErr != nil {
+				return writeErr
+			}
+			return writer.Flush()
+		}
+		if err := write("220 localhost ESMTP ready\r\n"); err != nil {
+			serverErr <- err
+			return
+		}
+		var message strings.Builder
+		inData := false
+		for {
+			line, readErr := reader.ReadString('\n')
+			if readErr != nil {
+				serverErr <- readErr
+				return
+			}
+			command := strings.TrimRight(line, "\r\n")
+			if inData {
+				if command == "." {
+					inData = false
+					received <- message.String()
+					if err := write("250 2.0.0 queued\r\n"); err != nil {
+						serverErr <- err
+						return
+					}
+				} else {
+					message.WriteString(command + "\n")
+				}
+				continue
+			}
+			switch {
+			case strings.HasPrefix(command, "EHLO"):
+				err = write("250-localhost\r\n250 AUTH PLAIN\r\n")
+			case strings.HasPrefix(command, "AUTH PLAIN"):
+				err = write("235 2.7.0 authenticated\r\n")
+			case strings.HasPrefix(command, "MAIL FROM"), strings.HasPrefix(command, "RCPT TO"):
+				err = write("250 2.1.0 ok\r\n")
+			case command == "DATA":
+				inData = true
+				err = write("354 send message\r\n")
+			case command == "QUIT":
+				serverErr <- write("221 2.0.0 bye\r\n")
+				return
+			default:
+				serverErr <- fmt.Errorf("unexpected SMTP command %q", command)
+				return
+			}
+			if err != nil {
+				serverErr <- err
+				return
+			}
+		}
+	}()
+
+	mailer := SMTPMailer{
+		Address: listener.Addr().String(), Username: "api_token", Password: "secret", From: "no-reply@example.com",
+		Timeout: time.Second, TLSConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+	}
+	if err := mailer.SendOTP(context.Background(), "staff@example.com", "123456"); err != nil {
+		t.Fatal(err)
+	}
+	if message := <-received; !strings.Contains(message, "Your sign-in code is 123456") {
+		t.Fatalf("message body missing OTP: %q", message)
+	}
+	if err := <-serverErr; err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestTokenFormat(t *testing.T) {
 	for _, kind := range []string{"staff", "reader"} {

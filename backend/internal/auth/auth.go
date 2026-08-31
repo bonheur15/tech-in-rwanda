@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
 	"errors"
@@ -40,15 +41,77 @@ func (TerminalMailer) SendOTP(_ context.Context, email, code string) error {
 	return nil
 }
 
-type SMTPMailer struct{ Address, Username, Password, From string }
+type SMTPMailer struct {
+	Address, Username, Password, From string
+	Timeout                           time.Duration
+	TLSConfig                         *tls.Config
+}
 
-func (m SMTPMailer) SendOTP(_ context.Context, to, code string) error {
+func (m SMTPMailer) SendOTP(ctx context.Context, to, code string) error {
 	host, _, err := net.SplitHostPort(m.Address)
 	if err != nil {
 		return err
 	}
+	timeout := m.Timeout
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	dialer := &net.Dialer{Timeout: timeout}
+	rawConn, err := dialer.DialContext(ctx, "tcp", m.Address)
+	if err != nil {
+		return err
+	}
+	defer rawConn.Close()
+	deadline := time.Now().Add(timeout)
+	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+		deadline = contextDeadline
+	}
+	if err = rawConn.SetDeadline(deadline); err != nil {
+		return err
+	}
+	stopCancel := context.AfterFunc(ctx, func() { _ = rawConn.Close() })
+	defer stopCancel()
+
+	tlsConfig := m.TLSConfig
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host}
+	} else {
+		tlsConfig = tlsConfig.Clone()
+		if tlsConfig.ServerName == "" {
+			tlsConfig.ServerName = host
+		}
+	}
+	tlsConn := tls.Client(rawConn, tlsConfig)
+	if err = tlsConn.HandshakeContext(ctx); err != nil {
+		return err
+	}
+	client, err := smtp.NewClient(tlsConn, host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if err = client.Auth(smtp.PlainAuth("", m.Username, m.Password, host)); err != nil {
+		return err
+	}
+	if err = client.Mail(m.From); err != nil {
+		return err
+	}
+	if err = client.Rcpt(to); err != nil {
+		return err
+	}
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
 	msg := []byte("To: " + to + "\r\nFrom: " + m.From + "\r\nSubject: Rwanda Free Space sign-in code\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nYour sign-in code is " + code + ". It expires in 10 minutes.\r\n")
-	return smtp.SendMail(m.Address, smtp.PlainAuth("", m.Username, m.Password, host), m.From, []string{to}, msg)
+	if _, err = w.Write(msg); err != nil {
+		_ = w.Close()
+		return err
+	}
+	if err = w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }
 
 type Turnstile interface {

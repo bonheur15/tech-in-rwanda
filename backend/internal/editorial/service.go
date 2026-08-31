@@ -195,12 +195,17 @@ func (s *Service) Decide(ctx context.Context, a auth.Actor, id string, approve b
 	if a.Role != "superadmin" {
 		return auth.ErrUnauthorized
 	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	var postID, version string
-	if err := s.DB.QueryRowContext(ctx, "SELECT post_id,version_id FROM review_decisions WHERE id=? AND status='pending'", id).Scan(&postID, &version); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT post_id,version_id FROM review_decisions WHERE id=? AND status='pending'", id).Scan(&postID, &version); err != nil {
 		return err
 	}
 	if approve {
-		if err := s.publishVersion(ctx, a, postID, version); err != nil {
+		if err := s.publishVersionTx(ctx, tx, postID, version); err != nil {
 			return err
 		}
 	}
@@ -209,8 +214,11 @@ func (s *Service) Decide(ctx context.Context, a auth.Actor, id string, approve b
 		status = "approved"
 	}
 	now := s.now().Format(time.RFC3339Nano)
-	_, err := s.DB.ExecContext(ctx, "UPDATE review_decisions SET status=?,reason=?,decided_by=?,decided_at=? WHERE id=? AND status='pending'; UPDATE posts SET state=CASE WHEN ?='approved' THEN 'published' ELSE 'draft' END WHERE id=?", status, reason, a.IdentityID, now, id, status, postID)
-	return err
+	_, err = tx.ExecContext(ctx, "UPDATE review_decisions SET status=?,reason=?,decided_by=?,decided_at=? WHERE id=? AND status='pending'; UPDATE posts SET state=CASE WHEN ?='approved' THEN 'published' ELSE 'draft' END WHERE id=?", status, reason, a.IdentityID, now, id, status, postID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Service) publishVersion(ctx context.Context, a auth.Actor, postID, version string) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -218,8 +226,15 @@ func (s *Service) publishVersion(ctx context.Context, a auth.Actor, postID, vers
 		return err
 	}
 	defer tx.Rollback()
+	if err = s.publishVersionTx(ctx, tx, postID, version); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Service) publishVersionTx(ctx context.Context, tx *sql.Tx, postID, version string) error {
 	var title, excerpt, body, oldSlug string
-	if err = tx.QueryRowContext(ctx, "SELECT v.title,v.excerpt,v.content_json,p.slug FROM post_versions v JOIN posts p ON p.id=v.post_id WHERE v.id=? AND v.post_id=?", version, postID).Scan(&title, &excerpt, &body, &oldSlug); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT v.title,v.excerpt,v.content_json,p.slug FROM post_versions v JOIN posts p ON p.id=v.post_id WHERE v.id=? AND v.post_id=?", version, postID).Scan(&title, &excerpt, &body, &oldSlug); err != nil {
 		return err
 	}
 	now := s.now().Format(time.RFC3339Nano)
@@ -232,13 +247,13 @@ func (s *Service) publishVersion(ctx context.Context, a auth.Actor, postID, vers
 	if oldSlug != slug {
 		tx.ExecContext(ctx, "INSERT OR IGNORE INTO slug_aliases(slug,post_id,created_at)VALUES(?,?,?)", oldSlug, postID, now)
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE posts SET title=?,excerpt=?,slug=?,published_version_id=?,state='published',ever_published=1,published_at=COALESCE(published_at,?),updated_at=? WHERE id=?", title, excerpt, slug, version, now, now, postID); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE posts SET title=?,excerpt=?,slug=?,published_version_id=?,state='published',ever_published=1,published_at=COALESCE(published_at,?),updated_at=? WHERE id=?", title, excerpt, slug, version, now, now, postID); err != nil {
 		return err
 	}
 	tx.ExecContext(ctx, "DELETE FROM post_search WHERE post_id=?", postID)
 	tx.ExecContext(ctx, "INSERT INTO post_search(post_id,title,excerpt,body)VALUES(?,?,?,?)", postID, title, excerpt, body)
 	tx.ExecContext(ctx, "UPDATE media_assets SET status='public' WHERE id IN(SELECT asset_id FROM article_media WHERE post_id=?)", postID)
-	return tx.Commit()
+	return nil
 }
 func (s *Service) Fork(ctx context.Context, a auth.Actor, postID string) (Post, error) {
 	var title, excerpt, content, version string

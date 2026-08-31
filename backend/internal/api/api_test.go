@@ -22,3 +22,10 @@ func TestActorKindForRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestMutationOriginAllowsConfiguredDevelopmentAliases(t *testing.T) {
+	a := &API{Origin: "http://127.0.0.1:4321", AllowedOrigins: map[string]struct{}{"http://localhost:4321": {}}}
+	if !a.originAllowed("http://127.0.0.1:4321") || !a.originAllowed("http://localhost:4321") || a.originAllowed("https://attacker.example") {
+		t.Fatal("origin allowlist is inconsistent")
+	}
+}

@@ -51,14 +51,17 @@ func (a *API) readerComments(w http.ResponseWriter, r *http.Request, x auth.Acto
 }
 
 func (a *API) publicReader(w http.ResponseWriter, r *http.Request) {
-	var username, avatar, joined, email string
+	var identity, username, avatar, joined, email string
 	var visible bool
-	err := a.DB.QueryRowContext(r.Context(), "SELECT r.username,r.avatar_key,r.joined_at,r.email_visible,CASE WHEN r.email_visible THEN i.email ELSE '' END FROM reader_profiles r JOIN identities i ON i.id=r.identity_id WHERE r.username=? AND r.status='active'", r.PathValue("username")).Scan(&username, &avatar, &joined, &visible, &email)
+	err := a.DB.QueryRowContext(r.Context(), "SELECT r.identity_id,r.username,r.avatar_key,r.joined_at,r.email_visible,CASE WHEN r.email_visible THEN i.email ELSE '' END FROM reader_profiles r JOIN identities i ON i.id=r.identity_id WHERE r.username=? AND r.status='active'", r.PathValue("username")).Scan(&identity, &username, &avatar, &joined, &visible, &email)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"username": username, "avatar": avatar, "joinedAt": joined, "emailVisible": visible, "email": email})
+	rows, _ := a.DB.QueryContext(r.Context(), "SELECT c.id,v.body,p.title,p.slug,c.created_at FROM comments c JOIN comment_versions v ON v.id=c.public_version_id JOIN posts p ON p.id=c.post_id WHERE c.reader_id=? AND c.status='approved' ORDER BY c.created_at DESC LIMIT 50", identity)
+	comments := []map[string]string{}
+	if rows != nil { defer rows.Close(); for rows.Next() { var id, body, title, slug, created string; if rows.Scan(&id,&body,&title,&slug,&created)==nil { comments=append(comments,map[string]string{"id":id,"body":body,"postTitle":title,"postSlug":slug,"createdAt":created}) } } }
+	httpx.JSON(w, 200, map[string]any{"username": username, "avatar": avatar, "joinedAt": joined, "emailVisible": visible, "email": email, "comments": comments})
 }
 
 func (a *API) editComment(w http.ResponseWriter, r *http.Request, x auth.Actor) {

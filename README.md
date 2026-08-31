@@ -46,7 +46,7 @@ Backups use SQLite `VACUUM INTO` for a consistent snapshot and include a SHA-256
 
 ## Docker
 
-The production image runs as UID 10001. `tini` starts a signal-aware supervisor, Go listens only on `127.0.0.1:8081`, and Astro is the sole public listener on `:8080`. The health check crosses Astro's proxy and verifies the Go database connection.
+The production image leaves runtime identity and filesystem isolation to the hosting platform. `tini` starts a signal-aware supervisor, Go listens only on `127.0.0.1:8081`, and Astro is the sole public listener on `:8080`. The health check crosses Astro's proxy and verifies the Go database connection.
 
 ```sh
 cp .env.example .env

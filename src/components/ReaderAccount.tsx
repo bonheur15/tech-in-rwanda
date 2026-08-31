@@ -31,7 +31,7 @@ async function api<T = any>(path: string, init: RequestInit = {}) {
   return body.data as T;
 }
 
-export default function ReaderAccount({ siteKey }: { siteKey: string }) {
+export default function ReaderAccount({ siteKey, development }: { siteKey: string; development: boolean }) {
   const [me, setMe] = useState<any>(null),
     [checked, setChecked] = useState(false),
     [email, setEmail] = useState(''),
@@ -48,6 +48,7 @@ export default function ReaderAccount({ siteKey }: { siteKey: string }) {
   }, []);
   useEffect(() => {
     if (me || step !== 'email') return;
+    if (development) { setToken('rfs-development-turnstile'); return; }
     const script = document.createElement('script');
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
     script.async = true;
@@ -61,7 +62,7 @@ export default function ReaderAccount({ siteKey }: { siteKey: string }) {
     };
     document.head.appendChild(script);
     return () => script.remove();
-  }, [me, step, siteKey]);
+  }, [me, step, siteKey, development]);
   if (!checked) return <p>Opening account…</p>;
   if (me?.onboardingRequired) return <Onboarding done={() => location.reload()} />;
   if (me) return <ReaderHome me={me} />;
@@ -112,7 +113,7 @@ export default function ReaderAccount({ siteKey }: { siteKey: string }) {
                 className="mt-2 w-full border border-line px-3 py-3"
               />
             </label>
-            <div ref={widget} className="mt-5 min-h-[65px]" />
+            {development ? <p className="mt-5 border border-line bg-paper p-3 text-xs text-muted">Development challenge enabled. Production uses Cloudflare Turnstile.</p> : <div ref={widget} className="mt-5 min-h-[65px]" />}
           </>
         ) : (
           <label className="text-sm font-semibold">

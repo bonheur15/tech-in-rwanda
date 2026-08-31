@@ -16,7 +16,7 @@ dev: generate ## Run Astro and Go together with coordinated shutdown
 	@./scripts/dev.sh
 
 generate: ## Generate the TypeScript API client from the Go contract
-	@$(GO) generate ./backend/...
+	@$(GO) run ./backend/cmd/gen-client -out src/lib/api/generated.ts
 
 generate-check: ## Verify generated API code is current
 	@$(GO) run ./backend/cmd/gen-client -out src/lib/api/generated.ts -check

@@ -24,12 +24,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM node:24-alpine AS runtime
 RUN apk add --no-cache tini && addgroup -S -g 10001 rfs && adduser -S -D -H -u 10001 -G rfs rfs
 WORKDIR /app
-COPY --from=web-build /source/dist ./dist
-COPY --from=web-runtime-dependencies /source/node_modules ./node_modules
-COPY --from=web-runtime-dependencies /source/package.json ./package.json
-COPY --from=go-build /out/rfs-api /out/blogctl ./bin/
-COPY scripts/container-entrypoint.sh ./bin/container-entrypoint.sh
-RUN chmod 0555 ./bin/container-entrypoint.sh && mkdir -p /data/database /data/media /data/tmp && chown -R 10001:10001 /app /data
+COPY --chown=10001:10001 --from=web-build /source/dist ./dist
+COPY --chown=10001:10001 --from=web-runtime-dependencies /source/node_modules ./node_modules
+COPY --chown=10001:10001 --from=web-runtime-dependencies /source/package.json ./package.json
+COPY --chown=10001:10001 --from=go-build /out/rfs-api /out/blogctl ./bin/
+COPY --chown=10001:10001 --chmod=0555 scripts/container-entrypoint.sh ./bin/container-entrypoint.sh
+RUN mkdir -p /data/database /data/media /data/tmp && chown -R 10001:10001 /data
 ENV APP_ENV=production APP_ADDR=127.0.0.1:8081 DATABASE_PATH=/data/database/blog.sqlite3 MEDIA_DIR=/data/media UPLOAD_TEMP_DIR=/data/tmp HOST=0.0.0.0 PORT=8080 INTERNAL_API_URL=http://127.0.0.1:8081
 VOLUME ["/data"]
 EXPOSE 8080

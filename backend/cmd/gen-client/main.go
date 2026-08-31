@@ -11,6 +11,7 @@ import (
 )
 
 type contract struct{ Name, Method, Path string }
+
 var contracts = []contract{
 	{"health", "GET", "/api/v1/healthz"}, {"requestStaffOTP", "POST", "/auth/staff/request-otp"}, {"verifyStaffOTP", "POST", "/auth/staff/verify-otp"}, {"requestReaderOTP", "POST", "/auth/readers/request-otp"}, {"verifyReaderOTP", "POST", "/auth/readers/verify-otp"},
 	{"me", "GET", "/auth/me"}, {"readerMe", "GET", "/auth/me?kind=reader"}, {"logout", "POST", "/auth/logout"}, {"sessions", "GET", "/sessions"}, {"revokeOtherSessions", "DELETE", "/sessions?kind="}, {"revokeSession", "DELETE", "/sessions/"},
@@ -26,7 +27,9 @@ func main() {
 	check := flag.Bool("check", false, "check drift")
 	flag.Parse()
 	for _, route := range contracts {
-		if !strings.Contains(client, "\n "+route.Name+":") { panic("contract has no generated function: " + route.Name) }
+		if !strings.Contains(client, "\n "+route.Name+":") {
+			panic("contract has no generated function: " + route.Name)
+		}
 	}
 	body := []byte(client)
 	if *check {
@@ -50,13 +53,13 @@ export interface APIError { code: string; message: string; requestId?: string; d
 export interface Envelope<T> { data: T; meta: { requestId: string; nextCursor?: string } }
 export interface Post { id:string; ownerId:string; title:string; slug:string; excerpt:string; state:string; content:unknown; revision:number; publishedVersionId:string|null; sourcePostId:string|null; updatedAt:string; publishedAt:string|null }
 export interface Session { id:string; device:string; ipAddress:string; createdAt:string; lastActivityAt:string; expiresAt:string }
-export interface RequestOptions { baseUrl?:string; signal?:AbortSignal; timeoutMs?:number; ttlMs?:number; fetch?:typeof fetch; idempotencyKey?:string; csrfToken?:string; forceRefresh?:boolean }
+export interface RequestOptions { baseUrl?:string; signal?:AbortSignal; timeoutMs?:number; ttlMs?:number; fetch?:typeof fetch; idempotencyKey?:string; csrfToken?:string; forceRefresh?:boolean; returnEnvelope?:boolean }
 export class APIRequestError extends Error { constructor(message:string,public status=0,public code="request_failed",public requestId?:string){super(message);this.name="APIRequestError"} }
 type Entry={value:unknown;expires:number;tags:Set<string>}; const cache=new Map<string,Entry>(); const pending=new Map<string,Promise<unknown>>();
 const csrf=(path:string)=>{if(typeof document==="undefined")return "";const reader=path.includes("/reader/")||path.includes("/articles/")||path.includes("/comments/")||path.includes("/bookmarks");const names=reader?["__Host-rfs_reader_csrf=","rfs_reader_csrf="]:["__Host-rfs_staff_csrf=","rfs_staff_csrf="];return decodeURIComponent(document.cookie.split("; ").find(v=>names.some(n=>v.startsWith(n)))?.split("=")[1]??"")};
 function endpoint(path:string,base?:string){const root=base??(typeof window==="undefined"?(import.meta.env.INTERNAL_API_URL??"http://127.0.0.1:8081"):"");return root.replace(/\/$/,"")+path}
 export function invalidateTags(...tags:string[]){for(const [key,item] of cache)if(tags.some(tag=>item.tags.has(tag)))cache.delete(key)}
-export async function request<T>(method:string,path:string,body?:unknown,options:RequestOptions={},tags:string[]=[]):Promise<T>{const url=endpoint(path,options.baseUrl),key=method+":"+url;if(method==="GET"&&!options.forceRefresh){const hit=cache.get(key);if(hit&&hit.expires>Date.now())return hit.value as T;if(!options.signal&&pending.has(key))return pending.get(key) as Promise<T>}const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),options.timeoutMs??8000),abort=()=>controller.abort(options.signal?.reason);options.signal?.addEventListener("abort",abort,{once:true});const run=(async()=>{try{const multipart=body instanceof FormData;const response=await(options.fetch??fetch)(url,{method,credentials:"same-origin",headers:{Accept:"application/json",...(multipart?{}:{"Content-Type":"application/json"}),...(method==="GET"?{}:{"X-CSRF-Token":options.csrfToken??csrf(path)}),...(options.idempotencyKey?{"Idempotency-Key":options.idempotencyKey}:{})},body:body===undefined?undefined:multipart?body:JSON.stringify(body),signal:controller.signal,cache:path.includes("/auth/")||path.includes("/sessions")||path.includes("/draft")||path.includes("/admin/")?"no-store":"default"});const payload=await response.json().catch(()=>undefined);if(!response.ok){const e=payload?.error;throw new APIRequestError(e?.message??"API request failed",response.status,e?.code,e?.requestId)}if(!payload||!("data" in payload))throw new APIRequestError("Invalid API response",response.status,"invalid_response");if(method==="GET"&&(options.ttlMs??15000)>0)cache.set(key,{value:payload.data,expires:Date.now()+(options.ttlMs??15000),tags:new Set(tags)});if(method!=="GET")invalidateTags(...tags);return payload.data as T}catch(error){if(error instanceof APIRequestError)throw error;if(controller.signal.aborted)throw new APIRequestError("Request cancelled or timed out",0,"request_aborted");throw new APIRequestError(error instanceof Error?error.message:"Network request failed")}finally{clearTimeout(timer);options.signal?.removeEventListener("abort",abort);pending.delete(key)}})();if(method==="GET"&&!options.signal)pending.set(key,run);return run}
+export async function request<T>(method:string,path:string,body?:unknown,options:RequestOptions={},tags:string[]=[]):Promise<T>{const url=endpoint(path,options.baseUrl),key=method+":"+url+":"+(options.returnEnvelope?"envelope":"data");if(method==="GET"&&!options.forceRefresh){const hit=cache.get(key);if(hit&&hit.expires>Date.now())return hit.value as T;if(!options.signal&&pending.has(key))return pending.get(key) as Promise<T>}const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),options.timeoutMs??8000),abort=()=>controller.abort(options.signal?.reason);options.signal?.addEventListener("abort",abort,{once:true});const run=(async()=>{try{const multipart=body instanceof FormData;const response=await(options.fetch??fetch)(url,{method,credentials:"same-origin",headers:{Accept:"application/json",...(multipart?{}:{"Content-Type":"application/json"}),...(method==="GET"?{}:{"X-CSRF-Token":options.csrfToken??csrf(path)}),...(options.idempotencyKey?{"Idempotency-Key":options.idempotencyKey}:{})},body:body===undefined?undefined:multipart?body:JSON.stringify(body),signal:controller.signal,cache:path.includes("/auth/")||path.includes("/sessions")||path.includes("/draft")||path.includes("/admin/")?"no-store":"default"});const payload=await response.json().catch(()=>undefined);if(!response.ok){const e=payload?.error;throw new APIRequestError(e?.message??"API request failed",response.status,e?.code,e?.requestId)}if(!payload||!("data" in payload))throw new APIRequestError("Invalid API response",response.status,"invalid_response");const value=options.returnEnvelope?payload:payload.data;if(method==="GET"&&(options.ttlMs??15000)>0)cache.set(key,{value,expires:Date.now()+(options.ttlMs??15000),tags:new Set(tags)});if(method!=="GET")invalidateTags(...tags);return value as T}catch(error){if(error instanceof APIRequestError)throw error;if(controller.signal.aborted)throw new APIRequestError("Request cancelled or timed out",0,"request_aborted");throw new APIRequestError(error instanceof Error?error.message:"Network request failed")}finally{clearTimeout(timer);options.signal?.removeEventListener("abort",abort);pending.delete(key)}})();if(method==="GET"&&!options.signal)pending.set(key,run);return run}
 export const api={
  health:(o?:RequestOptions)=>request<{status:string}>("GET","/api/v1/healthz",undefined,{...o,ttlMs:0}),
  requestStaffOTP:(email:string,o?:RequestOptions)=>request<{accepted:boolean}>("POST","/api/v1/auth/staff/request-otp",{email},o),
@@ -69,11 +72,13 @@ export const api={
  onboardReader:(input:{username:string;avatar:string;emailVisible:boolean},o?:RequestOptions)=>request("POST","/api/v1/reader/onboarding",input,o,["profile"]),
  deleteReader:(mode:"preserve"|"tombstone",confirmation:string,o?:RequestOptions)=>request("DELETE","/api/v1/reader/account",{mode,confirmation},o,["profile","bookmarks","comments"]),
  listPosts:(o?:RequestOptions)=>request<Post[]>("GET","/api/v1/public/posts",undefined,o,["archive"]),
+ listPostsPage:(cursor?:string,o?:RequestOptions)=>request<Envelope<Post[]>>("GET","/api/v1/public/posts?limit=24"+(cursor?"&cursor="+encodeURIComponent(cursor):""),undefined,{...o,returnEnvelope:true},["archive"]),
  getPost:(slug:string,o?:RequestOptions)=>request<Post>("GET","/api/v1/public/posts/"+encodeURIComponent(slug),undefined,o,["post:"+slug]),
  createPost:(input:Pick<Post,"title"|"excerpt"|"content">,o?:RequestOptions)=>request<Post>("POST","/api/v1/posts",input,o,["archive"]),
  saveDraft:(id:string,input:Pick<Post,"title"|"excerpt"|"content"|"revision">,o?:RequestOptions)=>request<Post>("PUT","/api/v1/posts/"+id+"/draft",input,o,["post:"+id]),
  getDraft:(id:string,o?:RequestOptions)=>request<Post>("GET","/api/v1/posts/"+id+"/draft",undefined,{...o,ttlMs:0}),
  versions:(id:string,o?:RequestOptions)=>request<unknown[]>("GET","/api/v1/posts/"+id+"/versions",undefined,{...o,ttlMs:0}),
+ versionsPage:(id:string,cursor?:string,o?:RequestOptions)=>request<Envelope<unknown[]>>("GET","/api/v1/posts/"+id+"/versions"+(cursor?"?cursor="+encodeURIComponent(cursor):""),undefined,{...o,ttlMs:0,returnEnvelope:true}),
  checkpoint:(id:string,reason:string,o?:RequestOptions)=>request("POST","/api/v1/posts/"+id+"/checkpoint",{reason},o,["post:"+id]),
  submit:(id:string,o?:RequestOptions)=>request("POST","/api/v1/posts/"+id+"/submit",{},o,["post:"+id,"reviews"]),
  restore:(id:string,version:string,o?:RequestOptions)=>request<Post>("POST","/api/v1/posts/"+id+"/restore/"+version,{},o,["post:"+id]),
@@ -82,6 +87,7 @@ export const api={
  publish:(id:string,o?:RequestOptions)=>request<{versionId:string}>("POST","/api/v1/posts/"+id+"/publish",{},o,["post:"+id,"archive"]),
  fork:(id:string,o?:RequestOptions)=>request<Post>("POST","/api/v1/posts/"+id+"/fork",{},o,["archive"]),
  sessions:(kind:"staff"|"reader"="staff",o?:RequestOptions)=>request<Session[]>("GET","/api/v1/sessions?kind="+kind,undefined,{...o,ttlMs:0}),
+ sessionsPage:(kind:"staff"|"reader"="staff",cursor?:string,o?:RequestOptions)=>request<Envelope<Session[]>>("GET","/api/v1/sessions?kind="+kind+(cursor?"&cursor="+encodeURIComponent(cursor):""),undefined,{...o,ttlMs:0,returnEnvelope:true}),
  revokeSession:(id:string,o?:RequestOptions)=>request("DELETE","/api/v1/sessions/"+id,{},o,["sessions"]),
  revokeOtherSessions:(kind:"staff"|"reader"="staff",o?:RequestOptions)=>request("DELETE","/api/v1/sessions?kind="+kind,{},o,["sessions"]),
  upload:(data:FormData,o?:RequestOptions)=>request<{id:string;src:string}>("POST","/api/v1/media",data,o,["media"]),
@@ -89,6 +95,7 @@ export const api={
  bookmark:(id:string,o?:RequestOptions)=>request("POST","/api/v1/articles/"+id+"/bookmarks",{},o,["bookmarks"]),
  unbookmark:(id:string,o?:RequestOptions)=>request("DELETE","/api/v1/articles/"+id+"/bookmarks",{},o,["bookmarks"]),
  comments:(id:string,o?:RequestOptions)=>request<unknown[]>("GET","/api/v1/articles/"+id+"/comments",undefined,{...o,ttlMs:0},["comments:"+id]),
+ commentsPage:(id:string,cursor?:string,o?:RequestOptions)=>request<Envelope<unknown[]>>("GET","/api/v1/articles/"+id+"/comments"+(cursor?"?cursor="+encodeURIComponent(cursor):""),undefined,{...o,ttlMs:0,returnEnvelope:true},["comments:"+id]),
  comment:(id:string,body:string,parentId:string|null,o?:RequestOptions)=>request("POST","/api/v1/articles/"+id+"/comments",{body,parentId},o,["comments:"+id]),
  editComment:(id:string,body:string,o?:RequestOptions)=>request("PATCH","/api/v1/comments/"+id,{body},o,["comments"]),
  reportComment:(id:string,reason:string,o?:RequestOptions)=>request("POST","/api/v1/comments/"+id+"/reports",{reason},o),

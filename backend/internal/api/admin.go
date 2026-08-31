@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -37,13 +38,19 @@ func (a *API) me(w http.ResponseWriter, r *http.Request, actor auth.Actor) {
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request, actor auth.Actor) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	for _, name := range []string{auth.StaffCookie, auth.ReaderCookie, "rfs_staff_session", "rfs_reader_session"} {
+	names := []string{auth.StaffCookie, "rfs_staff_session"}
+	csrfNames := []string{auth.StaffCSRFCookie, "rfs_staff_csrf"}
+	if actor.Kind == "reader" {
+		names = []string{auth.ReaderCookie, "rfs_reader_session"}
+		csrfNames = []string{auth.ReaderCSRFCookie, "rfs_reader_csrf"}
+	}
+	for _, name := range names {
 		if c, e := r.Cookie(name); e == nil {
 			a.DB.ExecContext(r.Context(), "UPDATE sessions SET revoked_at=? WHERE token_digest=?", now, auth.Digest(a.Auth.SessionPepper, c.Value))
 			http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1, HttpOnly: true, Secure: a.Auth.SecureCookies, SameSite: http.SameSiteLaxMode})
 		}
 	}
-	for _, name := range []string{"__Host-rfs_csrf", "rfs_csrf"} {
+	for _, name := range csrfNames {
 		http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1, Secure: a.Auth.SecureCookies, SameSite: http.SameSiteLaxMode})
 	}
 	httpx.JSON(w, 200, map[string]bool{"signedOut": true})
@@ -154,6 +161,41 @@ func (a *API) adminComments(w http.ResponseWriter, r *http.Request, x auth.Actor
 		out = append(out, map[string]any{"id": id, "postId": post, "postTitle": title, "username": user, "body": body, "parentId": parent, "depth": depth, "status": status, "createdAt": created})
 	}
 	httpx.JSON(w, 200, out)
+}
+
+func (a *API) adminReports(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if !requireSuperadmin(w, r, x) {
+		return
+	}
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT cr.id,cr.comment_id,cr.reason,cr.status,cr.created_at,r.username,COALESCE(v.body,'[deleted]') FROM comment_reports cr JOIN reader_profiles r ON r.identity_id=cr.reader_id JOIN comments c ON c.id=cr.comment_id LEFT JOIN comment_versions v ON v.id=c.public_version_id WHERE cr.status='open' ORDER BY cr.created_at")
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]string{}
+	for rows.Next() {
+		var id, comment, reason, status, created, username, body string
+		if err = rows.Scan(&id, &comment, &reason, &status, &created, &username, &body); err != nil {
+			break
+		}
+		out = append(out, map[string]string{"id": id, "commentId": comment, "reason": reason, "status": status, "createdAt": created, "username": username, "body": body})
+	}
+	respond(w, r, out, err, 200)
+}
+
+func (a *API) resolveReport(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if !requireSuperadmin(w, r, x) {
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	result, err := a.DB.ExecContext(r.Context(), "UPDATE comment_reports SET status='resolved',resolved_at=?,resolved_by=? WHERE id=? AND status='open'", now, x.IdentityID, r.PathValue("id"))
+	if err == nil {
+		if n, _ := result.RowsAffected(); n == 0 {
+			err = sql.ErrNoRows
+		}
+	}
+	respond(w, r, map[string]bool{"resolved": err == nil}, err, 200)
 }
 
 func (a *API) adminMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) {

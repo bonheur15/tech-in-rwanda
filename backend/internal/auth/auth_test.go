@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -77,6 +78,21 @@ func TestRejectMalformedToken(t *testing.T) {
 		if _, err := ParseToken(v); err == nil {
 			t.Fatalf("accepted %q", v)
 		}
+	}
+}
+
+func TestSessionCookiesAreScopedByCapability(t *testing.T) {
+	staff := httptest.NewRecorder()
+	SetSessionCookie(staff, "staff", "hub_staff.v1", "staff-csrf", true)
+	reader := httptest.NewRecorder()
+	SetSessionCookie(reader, "reader", "hub_reader.reader.v1", "reader-csrf", true)
+	staffCookies := strings.Join(staff.Header().Values("Set-Cookie"), "\n")
+	readerCookies := strings.Join(reader.Header().Values("Set-Cookie"), "\n")
+	if !strings.Contains(staffCookies, StaffCSRFCookie+"=") || strings.Contains(staffCookies, ReaderCSRFCookie+"=") {
+		t.Fatalf("staff cookie scope is wrong: %s", staffCookies)
+	}
+	if !strings.Contains(readerCookies, ReaderCSRFCookie+"=") {
+		t.Fatalf("reader CSRF cookie missing: %s", readerCookies)
 	}
 }
 func TestUsername(t *testing.T) {

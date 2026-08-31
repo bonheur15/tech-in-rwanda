@@ -7,7 +7,7 @@ IMAGE ?= rwanda-free-space:local
 
 .DEFAULT_GOAL := help
 
-.PHONY: help dev generate generate-check format format-check test test-go test-web vet check build web-build api-build cli migrate-status bootstrap-superadmin recover-account backup verify-backup media-check media-cleanup smoke docker-build docker-run clean
+.PHONY: help dev generate generate-check format format-check test test-go test-web vet check build web-build api-build cli migrate-status bootstrap-superadmin recover-account backup verify-backup media-check media-cleanup smoke docker-smoke docker-build docker-run clean
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; printf "Rwanda Free Space commands\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -44,6 +44,8 @@ check: generate-check format-check vet test ## Run the complete quality gate
 	@$(NPM) run check
 	@$(NPM) run build
 	@$(MAKE) --no-print-directory api-build
+	@$(MAKE) --no-print-directory smoke
+	@$(MAKE) --no-print-directory docker-smoke
 
 build: web-build api-build ## Build the static site and Go server
 
@@ -81,6 +83,9 @@ media-cleanup: ## Purge unreferenced media orphaned for at least seven days
 
 smoke: build ## Run the compiled site and API smoke test
 	@./scripts/smoke.sh
+
+docker-smoke: ## Build and verify the supervised production container
+	@IMAGE="$(IMAGE)" ./scripts/docker-smoke.sh
 
 docker-build: ## Build the optimized production image
 	@docker build --pull -t $(IMAGE) .

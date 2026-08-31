@@ -58,7 +58,7 @@ const readTime = Math.max(1, Math.ceil(words / 220));
             })
         }
       </p>
-      {(post.category || post.tags?.length) && <nav class="mt-5 flex flex-wrap justify-center gap-3 text-xs font-semibold uppercase tracking-wider">
+      {(Boolean(post.category) || post.tags?.length > 0) && <nav class="mt-5 flex flex-wrap justify-center gap-3 text-xs font-semibold uppercase tracking-wider">
         {post.category && <a href={`/categories/${post.categorySlug}/`} class="border border-line px-3 py-1.5">{post.category}</a>}
         {post.tags?.map((tag: any) => <a href={`/tags/${tag.slug}/`} class="border border-line px-3 py-1.5">#{tag.name}</a>)}
       </nav>}

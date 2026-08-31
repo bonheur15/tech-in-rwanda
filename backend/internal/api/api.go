@@ -181,9 +181,13 @@ func (a *API) withMutation(next handler) http.HandlerFunc {
 }
 
 func (a *API) originAllowed(origin string) bool {
-	if origin == "" || origin == a.Origin {
+	if origin == "" {
+		return a.Development
+	}
+	if origin == a.Origin {
 		return true
 	}
+	if !a.Development { return false }
 	_, ok := a.AllowedOrigins[origin]
 	return ok
 }
@@ -459,7 +463,13 @@ func (a *API) createPost(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 }
 func (a *API) getDraft(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	p, err := a.Editorial.GetDraft(r.Context(), x, r.PathValue("id"))
-	respond(w, r, p, err, 200)
+	if err != nil { respond(w, r, nil, err, 0); return }
+	var category *string
+	_ = a.DB.QueryRowContext(r.Context(), "SELECT category_id FROM posts WHERE id=?", p.ID).Scan(&category)
+	rows, _ := a.DB.QueryContext(r.Context(), "SELECT tag_id FROM post_tags WHERE post_id=?", p.ID)
+	tags := []string{}
+	if rows != nil { defer rows.Close(); for rows.Next() { var tag string; if rows.Scan(&tag) == nil { tags = append(tags, tag) } } }
+	httpx.JSON(w, 200, map[string]any{"id": p.ID, "ownerId": p.OwnerID, "title": p.Title, "slug": p.Slug, "excerpt": p.Excerpt, "state": p.State, "content": p.Content, "revision": p.Revision, "publishedVersionId": p.PublishedVersionID, "sourcePostId": p.SourcePostID, "updatedAt": p.UpdatedAt, "publishedAt": p.PublishedAt, "categoryId": category, "tagIds": tags})
 }
 func (a *API) saveDraft(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	var in struct {
@@ -558,7 +568,15 @@ func (a *API) deletePost(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	mediaRows, err := tx.QueryContext(r.Context(), "SELECT asset_id FROM article_media WHERE post_id=? UNION SELECT thumbnail_asset_id FROM posts WHERE id=? AND thumbnail_asset_id IS NOT NULL", r.PathValue("id"), r.PathValue("id"))
+	if err != nil { respond(w, r, nil, err, 0); return }
+	assets := []string{}
+	for mediaRows.Next() { var asset string; if mediaRows.Scan(&asset) == nil { assets = append(assets, asset) } }
+	mediaRows.Close()
 	_, err = tx.ExecContext(r.Context(), "DELETE FROM posts WHERE id=?", r.PathValue("id"))
+	for _, asset := range assets {
+		if err == nil { _, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='orphaned',orphaned_at=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?)", now, asset, asset, asset) }
+	}
 	if err == nil {
 		_, err = tx.ExecContext(r.Context(), "INSERT INTO audit_events(actor_id,action,object_type,object_id,detail_json,ip_address,created_at) VALUES(?,'post.deleted','post',?,?,?,?)", x.IdentityID, r.PathValue("id"), `{"reason":`+strconv.Quote(in.Reason)+`}`, auth.ClientIP(r), now)
 	}
@@ -654,7 +672,7 @@ func (a *API) comments(w http.ResponseWriter, r *http.Request) {
 	readerID := ""
 	for _, name := range []string{auth.ReaderCookie, "rfs_reader_session"} {
 		if cookie, err := r.Cookie(name); err == nil {
-			if actor, authErr := a.Auth.Authenticate(r.Context(), cookie.Value); authErr == nil && actor.Kind == "reader" {
+			if actor, authErr := a.Auth.Authenticate(r.Context(), cookie.Value); authErr == nil && actor.Kind == "reader" && actor.Status == "active" {
 				readerID = actor.IdentityID
 			}
 			break
@@ -811,8 +829,8 @@ func (a *API) updateStaff(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		return
 	}
 	defer tx.Rollback()
-	var oldRole, oldStatus string
-	if err = tx.QueryRowContext(r.Context(), "SELECT role,status FROM staff_profiles WHERE identity_id=?", id).Scan(&oldRole, &oldStatus); err != nil {
+	var oldRole, oldMode, oldStatus string
+	if err = tx.QueryRowContext(r.Context(), "SELECT role,publish_mode,status FROM staff_profiles WHERE identity_id=?", id).Scan(&oldRole, &oldMode, &oldStatus); err != nil {
 		respond(w, r, nil, err, 0)
 		return
 	}
@@ -826,8 +844,10 @@ func (a *API) updateStaff(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(r.Context(), "UPDATE staff_profiles SET role=?,publish_mode=?,status=?,updated_at=? WHERE identity_id=?", in.Role, in.PublishMode, in.Status, now, id)
-	if err == nil && in.Status == "inactive" {
+	if err == nil && (oldRole != in.Role || oldMode != in.PublishMode || oldStatus != in.Status) {
 		_, err = tx.ExecContext(r.Context(), "UPDATE sessions SET revoked_at=? WHERE identity_id=? AND kind='staff' AND revoked_at IS NULL", now, id)
+	}
+	if err == nil && in.Status == "inactive" {
 		if err == nil {
 			_, err = tx.ExecContext(r.Context(), "UPDATE posts SET state='frozen' WHERE owner_id=? AND state IN('draft','in_review')", id)
 		}
@@ -941,8 +961,9 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		respond(w, r, nil, err, 0)
 		return
 	}
-	var actual string
-	a.DB.QueryRowContext(r.Context(), "SELECT id FROM media_assets WHERE content_hash=?", hash).Scan(&actual)
+	var actual, actualOwner, actualStatus string
+	a.DB.QueryRowContext(r.Context(), "SELECT id,owner_id,status FROM media_assets WHERE content_hash=?", hash).Scan(&actual, &actualOwner, &actualStatus)
+	if actualOwner != x.IdentityID && actualStatus != "public" { httpx.Failure(w, r, 409, "private_duplicate", "This image already exists in another private media library"); return }
 	httpx.JSON(w, 201, map[string]any{"id": actual, "hash": hash, "src": "/media/" + hash + "/large.jpg", "width": cfg.Width, "height": cfg.Height, "alt": alt})
 }
 func (a *API) serveMedia(w http.ResponseWriter, r *http.Request) {

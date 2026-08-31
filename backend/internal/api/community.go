@@ -11,7 +11,7 @@ import (
 )
 
 func (a *API) updateReaderProfile(w http.ResponseWriter, r *http.Request, x auth.Actor) {
-	if x.Kind != "reader" {
+	if x.Kind != "reader" || x.Status != "active" {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}
@@ -29,7 +29,7 @@ func (a *API) updateReaderProfile(w http.ResponseWriter, r *http.Request, x auth
 }
 
 func (a *API) readerComments(w http.ResponseWriter, r *http.Request, x auth.Actor) {
-	if x.Kind != "reader" {
+	if x.Kind != "reader" || x.Status != "active" {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}
@@ -62,7 +62,7 @@ func (a *API) publicReader(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) editComment(w http.ResponseWriter, r *http.Request, x auth.Actor) {
-	if x.Kind != "reader" {
+	if x.Kind != "reader" || x.Status != "active" {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}
@@ -101,7 +101,7 @@ func (a *API) editComment(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 }
 
 func (a *API) reportComment(w http.ResponseWriter, r *http.Request, x auth.Actor) {
-	if x.Kind != "reader" {
+	if x.Kind != "reader" || x.Status != "active" {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}

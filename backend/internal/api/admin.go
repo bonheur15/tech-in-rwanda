@@ -17,10 +17,12 @@ func (a *API) me(w http.ResponseWriter, r *http.Request, actor auth.Actor) {
 	data := map[string]any{"identityId": actor.IdentityID, "kind": actor.Kind, "role": actor.Role, "publishMode": actor.PublishMode, "status": actor.Status}
 	if actor.Kind == "staff" {
 		var handle, name, bio string
-		if err := a.DB.QueryRowContext(r.Context(), "SELECT handle,display_name,bio FROM staff_profiles WHERE identity_id=?", actor.IdentityID).Scan(&handle, &name, &bio); err == nil {
+		var avatar *string
+		if err := a.DB.QueryRowContext(r.Context(), "SELECT s.handle,s.display_name,s.bio,(SELECT '/media/'||m.content_hash||'/small.jpg' FROM media_assets m WHERE m.id=s.avatar_asset_id) FROM staff_profiles s WHERE s.identity_id=?", actor.IdentityID).Scan(&handle, &name, &bio, &avatar); err == nil {
 			data["handle"] = handle
 			data["displayName"] = name
 			data["bio"] = bio
+			data["avatar"] = avatar
 		}
 	} else {
 		var username, avatar string
@@ -322,7 +324,7 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request, x auth.Actor
 		respond(w, r, nil, auth.ErrUnauthorized, 0)
 		return
 	}
-	var in struct{ DisplayName, Handle, Bio string }
+	var in struct{ DisplayName, Handle, Bio, AvatarAssetID string }
 	if decode(r, &in) != nil || strings.TrimSpace(in.DisplayName) == "" || !auth.ValidUsername(in.Handle) {
 		httpx.Failure(w, r, 400, "invalid_profile", "Display name and a valid handle are required")
 		return
@@ -335,16 +337,23 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request, x auth.Actor
 	}
 	defer tx.Rollback()
 	var old string
-	if err = tx.QueryRowContext(r.Context(), "SELECT handle FROM staff_profiles WHERE identity_id=?", x.IdentityID).Scan(&old); err != nil {
+	var oldAvatar *string
+	if err = tx.QueryRowContext(r.Context(), "SELECT handle,avatar_asset_id FROM staff_profiles WHERE identity_id=?", x.IdentityID).Scan(&old, &oldAvatar); err != nil {
 		respond(w, r, nil, err, 0)
 		return
 	}
 	if old != in.Handle {
 		_, err = tx.ExecContext(r.Context(), "INSERT OR IGNORE INTO staff_handle_aliases(handle,identity_id,created_at)VALUES(?,?,?)", old, x.IdentityID, now)
 	}
-	if err == nil {
-		_, err = tx.ExecContext(r.Context(), "UPDATE staff_profiles SET handle=?,display_name=?,bio=?,updated_at=? WHERE identity_id=?", in.Handle, strings.TrimSpace(in.DisplayName), strings.TrimSpace(in.Bio), now, x.IdentityID)
+	if err == nil && in.AvatarAssetID != "" {
+		var owner, status string
+		if err = tx.QueryRowContext(r.Context(), "SELECT owner_id,status FROM media_assets WHERE id=?", in.AvatarAssetID).Scan(&owner, &status); err == nil && owner != x.IdentityID && status != "public" && x.Role != "superadmin" { err = auth.ErrUnauthorized }
 	}
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), "UPDATE staff_profiles SET handle=?,display_name=?,bio=?,avatar_asset_id=CASE WHEN ?='' THEN avatar_asset_id ELSE ? END,updated_at=? WHERE identity_id=?", in.Handle, strings.TrimSpace(in.DisplayName), strings.TrimSpace(in.Bio), in.AvatarAssetID, in.AvatarAssetID, now, x.IdentityID)
+	}
+	if err == nil && in.AvatarAssetID != "" { _, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='public' WHERE id=?", in.AvatarAssetID) }
+	if err == nil && oldAvatar != nil && in.AvatarAssetID != "" && *oldAvatar != in.AvatarAssetID { _, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='orphaned',orphaned_at=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?) AND NOT EXISTS(SELECT 1 FROM staff_profiles WHERE avatar_asset_id=?)", now, *oldAvatar, *oldAvatar, *oldAvatar, *oldAvatar) }
 	if err == nil {
 		err = tx.Commit()
 	}

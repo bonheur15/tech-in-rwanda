@@ -130,6 +130,9 @@ func (a *API) deleteReaderAccount(w http.ResponseWriter, r *http.Request, x auth
 		return
 	}
 	defer tx.Rollback()
+	if in.Mode == "preserve" {
+		_, err = tx.ExecContext(r.Context(), "DELETE FROM comments WHERE reader_id=? AND status IN('pending','rejected')", x.IdentityID)
+	}
 	if in.Mode == "tombstone" {
 		_, err = tx.ExecContext(r.Context(), "UPDATE comment_versions SET body='[deleted]' WHERE comment_id IN(SELECT id FROM comments WHERE reader_id=?)", x.IdentityID)
 	}

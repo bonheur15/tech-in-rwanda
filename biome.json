@@ -20,7 +20,8 @@
       "!!bin",
       "!!**/bin",
       "!!coverage",
-      "!!**/coverage"
+      "!!**/coverage",
+      "!!src/lib/api/generated.ts"
     ]
   },
   "formatter": {

@@ -10,6 +10,57 @@ import (
 	"rwandafreespace.com/blog/backend/internal/platform/httpx"
 )
 
+func (a *API) updateReaderProfile(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if x.Kind != "reader" {
+		respond(w, r, nil, auth.ErrUnauthorized, 0)
+		return
+	}
+	var in struct {
+		Avatar       string
+		EmailVisible bool
+	}
+	allowed := map[string]bool{"sunrise": true, "hills": true, "ink": true, "agaseke": true, "volcano": true, "coffee": true}
+	if decode(r, &in) != nil || !allowed[in.Avatar] {
+		httpx.Failure(w, r, 400, "invalid_profile", "Choose a built-in avatar")
+		return
+	}
+	_, err := a.DB.ExecContext(r.Context(), "UPDATE reader_profiles SET avatar_key=?,email_visible=? WHERE identity_id=?", in.Avatar, in.EmailVisible, x.IdentityID)
+	respond(w, r, map[string]bool{"updated": err == nil}, err, 200)
+}
+
+func (a *API) readerComments(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if x.Kind != "reader" {
+		respond(w, r, nil, auth.ErrUnauthorized, 0)
+		return
+	}
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT c.id,p.title,p.slug,COALESCE(pending.body,public.body,'[deleted]'),c.status,c.created_at FROM comments c JOIN posts p ON p.id=c.post_id LEFT JOIN comment_versions pending ON pending.id=c.pending_version_id LEFT JOIN comment_versions public ON public.id=c.public_version_id WHERE c.reader_id=? ORDER BY c.created_at DESC", x.IdentityID)
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]string{}
+	for rows.Next() {
+		var id, title, slug, body, status, created string
+		if err = rows.Scan(&id, &title, &slug, &body, &status, &created); err != nil {
+			break
+		}
+		out = append(out, map[string]string{"id": id, "title": title, "slug": slug, "body": body, "status": status, "createdAt": created})
+	}
+	respond(w, r, out, err, 200)
+}
+
+func (a *API) publicReader(w http.ResponseWriter, r *http.Request) {
+	var username, avatar, joined, email string
+	var visible bool
+	err := a.DB.QueryRowContext(r.Context(), "SELECT r.username,r.avatar_key,r.joined_at,r.email_visible,CASE WHEN r.email_visible THEN i.email ELSE '' END FROM reader_profiles r JOIN identities i ON i.id=r.identity_id WHERE r.username=? AND r.status='active'", r.PathValue("username")).Scan(&username, &avatar, &joined, &visible, &email)
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"username": username, "avatar": avatar, "joinedAt": joined, "emailVisible": visible, "email": email})
+}
+
 func (a *API) editComment(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	if x.Kind != "reader" {
 		respond(w, r, nil, auth.ErrUnauthorized, 0)

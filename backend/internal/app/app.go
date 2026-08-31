@@ -16,7 +16,9 @@ func New(cfg config.Config, db *sql.DB, logger *slog.Logger) http.Handler {
 	if cfg.MailMode == "smtp" {
 		mailer = auth.SMTPMailer{Address: cfg.SMTPAddress, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom}
 	}
-	authService := &auth.Service{DB: db, SessionPepper: cfg.SessionPepper, OTPPepper: cfg.OTPPepper, Mailer: mailer, Turnstile: auth.SiteVerifier{Secret: cfg.TurnstileSecret, Client: &http.Client{Timeout: 5e9}}, SecureCookies: cfg.Environment == "production"}
+	turnstile := auth.Turnstile(auth.SiteVerifier{Secret: cfg.TurnstileSecret, Client: &http.Client{Timeout: 5e9}})
+	if cfg.Environment != "production" { turnstile = auth.DevelopmentVerifier{} }
+	authService := &auth.Service{DB: db, SessionPepper: cfg.SessionPepper, OTPPepper: cfg.OTPPepper, Mailer: mailer, Turnstile: turnstile, SecureCookies: cfg.Environment == "production"}
 	handler := (&api.API{DB: db, Auth: authService, Editorial: &editorial.Service{DB: db}, Logger: logger, Origin: cfg.PublicOrigin, MediaDir: cfg.MediaDir, MailMode: cfg.MailMode, Development: cfg.Environment != "production"}).Routes()
 	return httpx.Chain(handler, httpx.RequestID, httpx.SecurityHeaders, httpx.CORS(cfg.AllowedOrigins), httpx.Recover(logger), httpx.Log(logger))
 }

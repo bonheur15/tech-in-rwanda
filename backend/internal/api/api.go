@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -187,7 +188,9 @@ func (a *API) originAllowed(origin string) bool {
 	if origin == a.Origin {
 		return true
 	}
-	if !a.Development { return false }
+	if !a.Development {
+		return false
+	}
 	_, ok := a.AllowedOrigins[origin]
 	return ok
 }
@@ -265,19 +268,65 @@ func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]any{"kind": kind, "identityId": actor.IdentityID, "csrfToken": csrf})
 }
 func (a *API) sessions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
-	rows, err := a.DB.QueryContext(r.Context(), "SELECT id,user_agent,ip_address,created_at,last_activity_at,expires_at FROM sessions WHERE identity_id=? AND kind=? AND revoked_at IS NULL ORDER BY created_at DESC", x.IdentityID, x.Kind)
+	query := "SELECT id,token_digest,user_agent,ip_address,created_at,last_activity_at,expires_at FROM sessions WHERE identity_id=? AND kind=? AND revoked_at IS NULL"
+	args := []any{x.IdentityID, x.Kind}
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		created, id, err := decodeCursor(cursor)
+		if err != nil {
+			httpx.Failure(w, r, 400, "invalid_cursor", "The pagination cursor is invalid")
+			return
+		}
+		query += " AND (created_at<? OR (created_at=? AND id<?))"
+		args = append(args, created, created, id)
+	}
+	query += " ORDER BY created_at DESC,id DESC LIMIT 51"
+	rows, err := a.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		httpx.Failure(w, r, 500, "database_error", "Could not load sessions")
 		return
 	}
 	defer rows.Close()
-	out := []map[string]string{}
+	out := []map[string]any{}
+	currentDigest := []byte(nil)
+	names := []string{auth.StaffCookie, "rfs_staff_session"}
+	if x.Kind == "reader" {
+		names = []string{auth.ReaderCookie, "rfs_reader_session"}
+	}
+	for _, name := range names {
+		if cookie, cookieErr := r.Cookie(name); cookieErr == nil {
+			currentDigest = auth.Digest(a.Auth.SessionPepper, cookie.Value)
+			break
+		}
+	}
+	lastCreated, lastID, hasMore := "", "", false
 	for rows.Next() {
 		var id, ua, ip, created, last, expires string
-		rows.Scan(&id, &ua, &ip, &created, &last, &expires)
-		out = append(out, map[string]string{"id": id, "device": ua, "ipAddress": ip, "createdAt": created, "lastActivityAt": last, "expiresAt": expires})
+		var digest []byte
+		rows.Scan(&id, &digest, &ua, &ip, &created, &last, &expires)
+		if len(out) >= 50 {
+			hasMore = true
+			continue
+		}
+		out = append(out, map[string]any{"id": id, "device": ua, "ipAddress": ip, "createdAt": created, "lastActivityAt": last, "expiresAt": expires, "current": bytes.Equal(digest, currentDigest)})
+		lastCreated, lastID = created, id
 	}
-	httpx.JSON(w, 200, out)
+	meta := map[string]any{}
+	if hasMore {
+		meta["nextCursor"] = encodeCursor(lastCreated, lastID)
+	}
+	httpx.JSONMeta(w, 200, out, meta)
+}
+
+func encodeCursor(created, id string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(created + "|" + id))
+}
+func decodeCursor(cursor string) (string, string, error) {
+	body, err := base64.RawURLEncoding.DecodeString(cursor)
+	parts := strings.SplitN(string(body), "|", 2)
+	if err != nil || len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", errors.New("invalid cursor")
+	}
+	return parts[0], parts[1], nil
 }
 func (a *API) revokeSession(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	a.DB.ExecContext(r.Context(), "UPDATE sessions SET revoked_at=? WHERE id=? AND identity_id=?", time.Now().UTC().Format(time.RFC3339Nano), r.PathValue("id"), x.IdentityID)
@@ -329,45 +378,60 @@ func (a *API) onboard(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 }
 func (a *API) publicPosts(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 1 || limit > 50 {
+		limit = 12
+	}
 	category, tag := strings.TrimSpace(r.URL.Query().Get("category")), strings.TrimSpace(r.URL.Query().Get("tag"))
-	if category != "" || tag != "" {
-		query := "SELECT p.id,p.owner_id,v.title,p.slug,v.excerpt,p.state,p.published_at,s.display_name,s.handle,COALESCE(c.slug,'') FROM posts p JOIN post_versions v ON v.id=p.published_version_id JOIN staff_profiles s ON s.identity_id=p.owner_id LEFT JOIN categories c ON c.id=p.category_id WHERE p.state='published'"
-		args := []any{}
-		if category != "" {
-			query += " AND c.slug=?"
-			args = append(args, category)
+	query := "SELECT p.id,p.owner_id,v.title,p.slug,v.excerpt,p.state,p.published_at,s.display_name,s.handle,COALESCE(c.slug,'') FROM posts p JOIN post_versions v ON v.id=p.published_version_id JOIN staff_profiles s ON s.identity_id=p.owner_id LEFT JOIN categories c ON c.id=p.category_id WHERE p.state='published'"
+	args := []any{}
+	if category != "" {
+		query += " AND c.slug=?"
+		args = append(args, category)
+	}
+	if tag != "" {
+		query += " AND EXISTS(SELECT 1 FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=p.id AND t.slug=?)"
+		args = append(args, tag)
+	}
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(cursor)
+		parts := strings.SplitN(string(decoded), "|", 2)
+		if err != nil || len(parts) != 2 {
+			httpx.Failure(w, r, 400, "invalid_cursor", "The pagination cursor is invalid")
+			return
 		}
-		if tag != "" {
-			query += " AND EXISTS(SELECT 1 FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=p.id AND t.slug=?)"
-			args = append(args, tag)
-		}
-		query += " ORDER BY p.published_at DESC LIMIT 50"
-		rows, err := a.DB.QueryContext(r.Context(), query, args...)
-		if err != nil {
+		query += " AND (p.published_at<? OR (p.published_at=? AND p.id<?))"
+		args = append(args, parts[0], parts[0], parts[1])
+	}
+	query += " ORDER BY p.published_at DESC,p.id DESC LIMIT ?"
+	args = append(args, limit+1)
+	rows, err := a.DB.QueryContext(r.Context(), query, args...)
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	lastPublished, lastID := "", ""
+	hasMore := false
+	for rows.Next() {
+		var id, owner, title, slug, excerpt, state, published, name, handle, cat string
+		if err = rows.Scan(&id, &owner, &title, &slug, &excerpt, &state, &published, &name, &handle, &cat); err != nil {
 			respond(w, r, nil, err, 0)
 			return
 		}
-		defer rows.Close()
-		out := []map[string]any{}
-		for rows.Next() {
-			var id, owner, title, slug, excerpt, state, published, name, handle, cat string
-			if err = rows.Scan(&id, &owner, &title, &slug, &excerpt, &state, &published, &name, &handle, &cat); err != nil {
-				respond(w, r, nil, err, 0)
-				return
-			}
+		if len(out) < limit {
 			out = append(out, map[string]any{"id": id, "ownerId": owner, "title": title, "slug": slug, "excerpt": excerpt, "state": state, "publishedAt": published, "author": name, "authorHandle": handle, "category": cat})
+			lastPublished, lastID = published, id
+		} else {
+			hasMore = true
 		}
-		w.Header().Set("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
-		httpx.JSON(w, 200, out)
-		return
-	}
-	posts, err := a.Editorial.Latest(r.Context(), limit)
-	if err != nil {
-		httpx.Failure(w, r, 500, "database_error", "Could not load posts")
-		return
 	}
 	w.Header().Set("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
-	httpx.JSON(w, 200, posts)
+	meta := map[string]any{}
+	if hasMore {
+		meta["nextCursor"] = base64.RawURLEncoding.EncodeToString([]byte(lastPublished + "|" + lastID))
+	}
+	httpx.JSONMeta(w, 200, out, meta)
 }
 
 func (a *API) categories(w http.ResponseWriter, r *http.Request) {
@@ -464,12 +528,23 @@ func (a *API) createPost(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 }
 func (a *API) getDraft(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	p, err := a.Editorial.GetDraft(r.Context(), x, r.PathValue("id"))
-	if err != nil { respond(w, r, nil, err, 0); return }
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
 	var category *string
 	_ = a.DB.QueryRowContext(r.Context(), "SELECT category_id FROM posts WHERE id=?", p.ID).Scan(&category)
 	rows, _ := a.DB.QueryContext(r.Context(), "SELECT tag_id FROM post_tags WHERE post_id=?", p.ID)
 	tags := []string{}
-	if rows != nil { defer rows.Close(); for rows.Next() { var tag string; if rows.Scan(&tag) == nil { tags = append(tags, tag) } } }
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var tag string
+			if rows.Scan(&tag) == nil {
+				tags = append(tags, tag)
+			}
+		}
+	}
 	httpx.JSON(w, 200, map[string]any{"id": p.ID, "ownerId": p.OwnerID, "title": p.Title, "slug": p.Slug, "excerpt": p.Excerpt, "state": p.State, "content": p.Content, "revision": p.Revision, "publishedVersionId": p.PublishedVersionID, "sourcePostId": p.SourcePostID, "updatedAt": p.UpdatedAt, "publishedAt": p.PublishedAt, "categoryId": category, "tagIds": tags})
 }
 func (a *API) saveDraft(w http.ResponseWriter, r *http.Request, x auth.Actor) {
@@ -509,13 +584,26 @@ func (a *API) versions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 		respond(w, r, nil, err, 0)
 		return
 	}
-	rows, err := a.DB.QueryContext(r.Context(), "SELECT id,number,title,excerpt,content_json,reason,created_by,created_at FROM post_versions WHERE post_id=? ORDER BY number DESC LIMIT 100", r.PathValue("id"))
+	query := "SELECT id,number,title,excerpt,content_json,reason,created_by,created_at FROM post_versions WHERE post_id=?"
+	args := []any{r.PathValue("id")}
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		created, versionID, cursorErr := decodeCursor(cursor)
+		if cursorErr != nil {
+			httpx.Failure(w, r, 400, "invalid_cursor", "The pagination cursor is invalid")
+			return
+		}
+		query += " AND (created_at<? OR (created_at=? AND id<?))"
+		args = append(args, created, created, versionID)
+	}
+	query += " ORDER BY created_at DESC,id DESC LIMIT 51"
+	rows, err := a.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
 	}
 	defer rows.Close()
 	out := []map[string]any{}
+	lastCreated, lastID, hasMore := "", "", false
 	for rows.Next() {
 		var id, title, excerpt, content, reason, by, at string
 		var number int
@@ -523,9 +611,18 @@ func (a *API) versions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 			respond(w, r, nil, err, 0)
 			return
 		}
+		if len(out) >= 50 {
+			hasMore = true
+			continue
+		}
 		out = append(out, map[string]any{"id": id, "number": number, "title": title, "excerpt": excerpt, "content": json.RawMessage(content), "reason": reason, "createdBy": by, "createdAt": at})
+		lastCreated, lastID = at, id
 	}
-	httpx.JSON(w, http.StatusOK, out)
+	meta := map[string]any{}
+	if hasMore {
+		meta["nextCursor"] = encodeCursor(lastCreated, lastID)
+	}
+	httpx.JSONMeta(w, http.StatusOK, out, meta)
 }
 
 func (a *API) restoreVersion(w http.ResponseWriter, r *http.Request, x auth.Actor) {
@@ -570,13 +667,23 @@ func (a *API) deletePost(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	defer tx.Rollback()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	mediaRows, err := tx.QueryContext(r.Context(), "SELECT asset_id FROM article_media WHERE post_id=? UNION SELECT thumbnail_asset_id FROM posts WHERE id=? AND thumbnail_asset_id IS NOT NULL", r.PathValue("id"), r.PathValue("id"))
-	if err != nil { respond(w, r, nil, err, 0); return }
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
 	assets := []string{}
-	for mediaRows.Next() { var asset string; if mediaRows.Scan(&asset) == nil { assets = append(assets, asset) } }
+	for mediaRows.Next() {
+		var asset string
+		if mediaRows.Scan(&asset) == nil {
+			assets = append(assets, asset)
+		}
+	}
 	mediaRows.Close()
 	_, err = tx.ExecContext(r.Context(), "DELETE FROM posts WHERE id=?", r.PathValue("id"))
 	for _, asset := range assets {
-		if err == nil { _, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='orphaned',orphaned_at=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?)", now, asset, asset, asset) }
+		if err == nil {
+			_, err = tx.ExecContext(r.Context(), "UPDATE media_assets SET status='orphaned',orphaned_at=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?)", now, asset, asset, asset)
+		}
 	}
 	if err == nil {
 		_, err = tx.ExecContext(r.Context(), "INSERT INTO audit_events(actor_id,action,object_type,object_id,detail_json,ip_address,created_at) VALUES(?,'post.deleted','post',?,?,?,?)", x.IdentityID, r.PathValue("id"), `{"reason":`+strconv.Quote(in.Reason)+`}`, auth.ClientIP(r), now)
@@ -593,7 +700,8 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, []any{})
 		return
 	}
-	rows, err := a.DB.QueryContext(r.Context(), "SELECT p.id,p.title,p.slug,p.excerpt,p.published_at FROM post_search s JOIN posts p ON p.id=s.post_id WHERE post_search MATCH ? AND p.state='published' ORDER BY rank LIMIT 30", q)
+	match := `"` + strings.ReplaceAll(q, `"`, `""`) + `"`
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT p.id,p.title,p.slug,p.excerpt,p.published_at FROM post_search s JOIN posts p ON p.id=s.post_id WHERE post_search MATCH ? AND p.state='published' ORDER BY rank LIMIT 30", match)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
@@ -679,22 +787,44 @@ func (a *API) comments(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	rows, err := a.DB.QueryContext(r.Context(), "SELECT c.id,COALESCE(r.username,'deleted_reader'),COALESCE(CASE WHEN c.status='approved' THEN public.body ELSE pending.body END,'[deleted]'),c.parent_id,c.depth,c.created_at,c.status,c.reader_id=? FROM comments c LEFT JOIN reader_profiles r ON r.identity_id=c.reader_id LEFT JOIN comment_versions public ON public.id=c.public_version_id LEFT JOIN comment_versions pending ON pending.id=c.pending_version_id WHERE c.post_id=? AND (c.status='approved' OR (c.reader_id=? AND c.status='pending')) ORDER BY c.created_at", readerID, r.PathValue("id"), readerID)
+	query := "SELECT c.id,COALESCE(r.username,'deleted_reader'),COALESCE(CASE WHEN c.status='approved' THEN public.body ELSE pending.body END,'[deleted]'),c.parent_id,c.depth,c.created_at,c.status,c.reader_id=? FROM comments c LEFT JOIN reader_profiles r ON r.identity_id=c.reader_id LEFT JOIN comment_versions public ON public.id=c.public_version_id LEFT JOIN comment_versions pending ON pending.id=c.pending_version_id WHERE c.post_id=? AND (c.status='approved' OR (c.reader_id=? AND c.status='pending'))"
+	args := []any{readerID, r.PathValue("id"), readerID}
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		created, commentID, cursorErr := decodeCursor(cursor)
+		if cursorErr != nil {
+			httpx.Failure(w, r, 400, "invalid_cursor", "The pagination cursor is invalid")
+			return
+		}
+		query += " AND (c.created_at>? OR (c.created_at=? AND c.id>?))"
+		args = append(args, created, created, commentID)
+	}
+	query += " ORDER BY c.created_at,c.id LIMIT 51"
+	rows, err := a.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
 	}
 	defer rows.Close()
 	out := []map[string]any{}
+	lastCreated, lastID, hasMore := "", "", false
 	for rows.Next() {
 		var id, user, body, created, status string
 		var parent *string
 		var depth int
 		var mine bool
 		rows.Scan(&id, &user, &body, &parent, &depth, &created, &status, &mine)
+		if len(out) >= 50 {
+			hasMore = true
+			continue
+		}
 		out = append(out, map[string]any{"id": id, "username": user, "body": body, "parentId": parent, "depth": depth, "createdAt": created, "status": status, "mine": mine})
+		lastCreated, lastID = created, id
 	}
-	httpx.JSON(w, 200, out)
+	meta := map[string]any{}
+	if hasMore {
+		meta["nextCursor"] = encodeCursor(lastCreated, lastID)
+	}
+	httpx.JSONMeta(w, 200, out, meta)
 }
 func (a *API) addComment(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	if x.Kind != "reader" || x.Status != "active" {
@@ -964,7 +1094,10 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 	}
 	var actual, actualOwner, actualStatus string
 	a.DB.QueryRowContext(r.Context(), "SELECT id,owner_id,status FROM media_assets WHERE content_hash=?", hash).Scan(&actual, &actualOwner, &actualStatus)
-	if actualOwner != x.IdentityID && actualStatus != "public" { httpx.Failure(w, r, 409, "private_duplicate", "This image already exists in another private media library"); return }
+	if actualOwner != x.IdentityID && actualStatus != "public" {
+		httpx.Failure(w, r, 409, "private_duplicate", "This image already exists in another private media library")
+		return
+	}
 	httpx.JSON(w, 201, map[string]any{"id": actual, "hash": hash, "src": "/media/" + hash + "/large.jpg", "width": cfg.Width, "height": cfg.Height, "alt": alt})
 }
 func (a *API) serveMedia(w http.ResponseWriter, r *http.Request) {

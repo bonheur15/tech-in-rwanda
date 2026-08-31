@@ -25,6 +25,8 @@ export default function ArticleCommunity({ postId }: { postId: string }) {
   const [reader, setReader] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [body, setBody] = useState('');
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const load = () =>
     api<any[]>(`/api/v1/articles/${postId}/comments`)
@@ -39,11 +41,16 @@ export default function ArticleCommunity({ postId }: { postId: string }) {
   const submit = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
-      await api(`/api/v1/articles/${postId}/comments`, {
-        method: 'POST',
-        body: JSON.stringify({ body, parentId: null }),
-      });
+      await api(
+        editingId ? `/api/v1/comments/${editingId}` : `/api/v1/articles/${postId}/comments`,
+        {
+          method: editingId ? 'PATCH' : 'POST',
+          body: JSON.stringify(editingId ? { body } : { body, parentId }),
+        },
+      );
       setBody('');
+      setParentId(null);
+      setEditingId(null);
       setMessage('Your comment is awaiting moderation.');
       load();
     } catch (e) {
@@ -86,8 +93,53 @@ export default function ArticleCommunity({ postId }: { postId: string }) {
             >
               <p className="text-sm leading-relaxed">{c.body}</p>
               <p className="mt-2 text-xs text-muted">
-                @{c.username} · {new Date(c.createdAt).toLocaleDateString('en-RW')}
+                <a href={`/readers/${c.username}/`}>@{c.username}</a> ·{' '}
+                {new Date(c.createdAt).toLocaleDateString('en-RW')}
+                {c.status === 'pending' && ' · Awaiting moderation'}
               </p>
+              {reader && (
+                <div className="mt-2 flex gap-4 text-xs font-semibold text-accent">
+                  {c.status === 'approved' && c.depth < 2 && (
+                    <button
+                      onClick={() => {
+                        setParentId(c.id);
+                        setEditingId(null);
+                        setBody('');
+                      }}
+                    >
+                      Reply
+                    </button>
+                  )}
+                  {c.mine && (
+                    <button
+                      onClick={() => {
+                        setEditingId(c.id);
+                        setParentId(null);
+                        setBody(c.body);
+                      }}
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {!c.mine && c.status === 'approved' && (
+                    <button
+                      onClick={async () => {
+                        const reason = window.prompt(
+                          'Briefly explain why this comment should be reviewed.',
+                        );
+                        if (!reason) return;
+                        await api(`/api/v1/comments/${c.id}/reports`, {
+                          method: 'POST',
+                          body: JSON.stringify({ reason }),
+                        });
+                        setMessage('Report sent to the moderation team.');
+                      }}
+                    >
+                      Report
+                    </button>
+                  )}
+                </div>
+              )}
             </article>
           ))
         ) : (
@@ -96,6 +148,22 @@ export default function ArticleCommunity({ postId }: { postId: string }) {
       </div>
       {reader ? (
         <form onSubmit={submit} className="mt-10 border border-line bg-white p-5">
+          {(parentId || editingId) && (
+            <div className="mb-4 flex items-center justify-between bg-paper p-3 text-sm">
+              <span>{editingId ? 'Editing your comment' : 'Writing a reply'}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setParentId(null);
+                  setEditingId(null);
+                  setBody('');
+                }}
+                className="font-semibold text-accent"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           <label className="text-sm font-semibold">
             Add a thoughtful comment
             <textarea
@@ -108,7 +176,11 @@ export default function ArticleCommunity({ postId }: { postId: string }) {
             />
           </label>
           <button className="mt-3 bg-ink px-4 py-2.5 text-sm font-semibold text-white">
-            Submit for moderation
+            {editingId
+              ? 'Save edit for moderation'
+              : parentId
+                ? 'Submit reply for moderation'
+                : 'Submit for moderation'}
           </button>
         </form>
       ) : (

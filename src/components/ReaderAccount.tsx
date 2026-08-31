@@ -243,6 +243,16 @@ function ReaderHome({ me }: { me: any }) {
         </section>
         <section className="border border-line bg-white p-6">
           <h2 className="font-display text-3xl">Sessions</h2>
+          <button
+            onClick={async () => {
+              await api('/api/v1/sessions?kind=reader', { method: 'DELETE', body: '{}' });
+              const current = await api<any[]>('/api/v1/sessions?kind=reader');
+              setSessions(current);
+            }}
+            className="mt-3 text-sm font-semibold text-accent"
+          >
+            Revoke all other sessions
+          </button>
           <div className="mt-5 grid gap-4">
             {sessions.map((s) => (
               <div key={s.id} className="border-t border-line pt-3 text-sm">

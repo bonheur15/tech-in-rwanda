@@ -95,6 +95,12 @@ func TestSessionCookiesAreScopedByCapability(t *testing.T) {
 		t.Fatalf("reader CSRF cookie missing: %s", readerCookies)
 	}
 }
+
+func TestDevelopmentTurnstileIsExplicit(t *testing.T) {
+	verifier := DevelopmentVerifier{}
+	if err := verifier.Verify(context.Background(), "rfs-development-turnstile", "127.0.0.1"); err != nil { t.Fatal(err) }
+	if err := verifier.Verify(context.Background(), "anything-else", "127.0.0.1"); err == nil { t.Fatal("unexpected development token accepted") }
+}
 func TestUsername(t *testing.T) {
 	if !ValidUsername("umucyo_24") || ValidUsername("Admin") || ValidUsername("ab") || ValidUsername("rwanda") {
 		t.Fatal("username rules failed")

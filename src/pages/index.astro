@@ -3,43 +3,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import '../styles/global.css';
 
-const demoStories = [
-  {
-    slug: 'test-article',
-    category: 'UX teardown',
-    title: 'What a broken public-service form teaches us about usable design',
-    summary:
-      'The confusing fields, missing feedback, and dead ends that make a simple online task harder, plus a practical way to rebuild it.',
-    date: '30 August 2026',
-    datetime: '2026-08-30',
-    readTime: '6 min read',
-    tone: 'bg-accent text-[#fffaf4]',
-  },
-  {
-    slug: 'test-article',
-    category: 'Product critique',
-    title: 'A checkout that asks too much and explains too little',
-    summary:
-      'We trace where trust disappears in a local shopping flow and show the smaller decisions that would make it feel reliable.',
-    date: '28 August 2026',
-    datetime: '2026-08-28',
-    readTime: '5 min read',
-    tone: 'bg-ink text-canvas',
-  },
-  {
-    slug: 'test-article',
-    category: 'Accessibility',
-    title: 'The Rwandan websites that forget keyboard users',
-    summary:
-      'A plain-language look at invisible focus, unreachable menus, and fixes that improve the experience for everyone.',
-    date: '25 August 2026',
-    datetime: '2026-08-25',
-    readTime: '7 min read',
-    tone: 'bg-surface text-accent',
-  },
-];
-
-let stories = demoStories;
+let stories: any[] = [];
 try {
   const origin =
     process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
@@ -65,7 +29,7 @@ try {
       }));
   }
 } catch {
-  /* Keep the editorial sample while the API is unavailable in design-only development. */
+  stories = [];
 }
 
 const eyebrow = 'm-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] text-accent';
@@ -182,13 +146,9 @@ const eyebrow = 'm-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] t
               Latest critiques
             </h2>
           </div>
-          <a
-            class="text-[0.82rem] font-bold text-muted underline underline-offset-4 hover:text-accent"
-            href="/critiques/test-article/">Open test article</a
-          >
         </div>
 
-        <div
+        {stories.length > 0 ? <div
           class="grid grid-cols-3 gap-[clamp(1.25rem,2.5vw,2.25rem)] max-[800px]:grid-cols-1 max-[800px]:gap-12"
         >
           {
@@ -242,7 +202,7 @@ const eyebrow = 'm-0 mb-5 text-[0.72rem] font-bold uppercase tracking-[0.14em] t
               </article>
             ))
           }
-        </div>
+        </div> : <div class="border-y border-line py-16 text-center"><p class="font-display text-3xl">The first critique is being prepared.</p><p class="mt-3 text-muted">Published writing will appear here.</p></div>}
       </section>
 
       <section

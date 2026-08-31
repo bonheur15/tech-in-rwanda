@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StoryList from '../components/StoryList.astro';
+const q = Astro.url.searchParams.get('q')?.trim() ?? '';
+const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
+const response = q ? await fetch(`${origin}/api/v1/search?q=${encodeURIComponent(q)}`) : null;
+const posts = response?.ok ? (await response.json()).data : [];
+---
+<BaseLayout title="Search | Rwanda Free Space"><main id="main-content" class="mx-auto max-w-[90rem] px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(4rem,8vw,8rem)]"><form class="mb-12 flex max-w-2xl border-b-2 border-ink"><label class="sr-only" for="search">Search critiques</label><input id="search" name="q" value={q} placeholder="Search the archive" class="min-w-0 flex-1 bg-transparent px-2 py-4 text-xl outline-none"/><button class="px-5 font-semibold">Search</button></form><StoryList eyebrow="Search" title={q?`Results for “${q}”`:'Find a critique'} posts={posts}/></main></BaseLayout>

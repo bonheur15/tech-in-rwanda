@@ -15,5 +15,6 @@ const reader = (await response.json()).data;
       <div><dt class="text-xs font-bold uppercase tracking-widest text-muted">Joined</dt><dd class="mt-2">{new Date(reader.joinedAt).toLocaleDateString('en-RW', { dateStyle: 'long' })}</dd></div>
       {reader.emailVisible && <div><dt class="text-xs font-bold uppercase tracking-widest text-muted">Email</dt><dd class="mt-2">{reader.email}</dd></div>}
     </dl>
+    <section class="mt-14 border-t border-line pt-8"><h2 class="font-display text-4xl">Approved comments</h2><div class="mt-6 grid gap-5">{reader.comments.length ? reader.comments.map((comment: any) => <article class="border-l-2 border-line pl-5"><p>{comment.body}</p><a href={`/critiques/${comment.postSlug}/`} class="mt-2 inline-block text-sm font-semibold text-accent">On {comment.postTitle}</a></article>) : <p class="text-muted">No approved comments yet.</p>}</div></section>
   </main>
 </BaseLayout>

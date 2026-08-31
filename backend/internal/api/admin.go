@@ -270,9 +270,16 @@ func (a *API) updateReader(w http.ResponseWriter, r *http.Request, x auth.Actor)
 	if !requireSuperadmin(w, r, x) {
 		return
 	}
-	var in struct{ Status, Reason string }
+	var in struct {
+		Status, Reason string
+		DurationDays   int
+	}
 	if decode(r, &in) != nil || !map[string]bool{"active": true, "suspended": true, "banned": true}[in.Status] {
 		httpx.Failure(w, r, 400, "invalid_status", "Choose active, suspended, or banned")
+		return
+	}
+	if in.Status == "suspended" && (in.DurationDays < 1 || in.DurationDays > 365) {
+		httpx.Failure(w, r, 400, "invalid_suspension", "Suspensions must last from 1 to 365 days")
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -285,6 +292,10 @@ func (a *API) updateReader(w http.ResponseWriter, r *http.Request, x auth.Actor)
 	_, err = tx.ExecContext(r.Context(), "UPDATE reader_profiles SET status=? WHERE identity_id=?", in.Status, r.PathValue("id"))
 	if err == nil && in.Status != "active" {
 		_, err = tx.ExecContext(r.Context(), "UPDATE sessions SET revoked_at=? WHERE identity_id=? AND kind='reader' AND revoked_at IS NULL", now, r.PathValue("id"))
+	}
+	if err == nil && in.Status == "suspended" {
+		ends := time.Now().UTC().Add(time.Duration(in.DurationDays) * 24 * time.Hour).Format(time.RFC3339Nano)
+		_, err = tx.ExecContext(r.Context(), "INSERT INTO account_suspensions(id,identity_id,starts_at,ends_at,reason,created_by,created_at)VALUES(?,?,?,?,?,?,?)", uuid.NewString(), r.PathValue("id"), now, ends, strings.TrimSpace(in.Reason), x.IdentityID, now)
 	}
 	if err == nil {
 		detail, _ := json.Marshal(map[string]string{"status": in.Status, "reason": in.Reason})

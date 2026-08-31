@@ -415,6 +415,16 @@ function DataPanel({
             >
               New article
             </button>
+          ) : tab === 'sessions' ? (
+            <button
+              onClick={async () => {
+                await call('/api/v1/sessions', { method: 'DELETE', body: '{}' });
+                load();
+              }}
+              className="border border-ink px-4 py-2.5 text-sm font-semibold"
+            >
+              Revoke all other sessions
+            </button>
           ) : undefined
         }
       />
@@ -456,16 +466,88 @@ function DataPanel({
                   <td className="whitespace-nowrap px-4 py-3">
                     {tab === 'articles' && (
                       <>
-                        <button onClick={() => { sessionStorage.setItem('rfs-edit-post', row.id); go('editor'); }} className="mr-3 font-semibold text-accent">Edit</button>
-                        {row.state === 'published' && <a href={`/critiques/${row.slug}/`} target="_blank" className="mr-3 font-semibold">Preview</a>}
-                        <button onClick={async () => { if (!confirm(`Create an independent fork of “${row.title}”?`)) return; const fork = await call<any>(`/api/v1/posts/${row.id}/fork`, {method:'POST', body:'{}'}); sessionStorage.setItem('rfs-edit-post', fork.id); go('editor'); }} className="mr-3 font-semibold">Fork</button>
-                        <button onClick={async () => { const typed = prompt(`Type the exact title to permanently delete this post:\n${row.title}`); if (typed !== row.title || !confirm('This permanently deletes the post, versions, comments, bookmarks, and references. Continue?')) return; await call(`/api/v1/posts/${row.id}`, {method:'DELETE', body:JSON.stringify({title:typed, confirmation:'permanently delete', reason:'Deleted from editorial workspace'})}); load(); }} className="font-semibold text-red-700">Delete</button>
+                        <button
+                          onClick={() => {
+                            sessionStorage.setItem('rfs-edit-post', row.id);
+                            go('editor');
+                          }}
+                          className="mr-3 font-semibold text-accent"
+                        >
+                          Edit
+                        </button>
+                        {row.state === 'published' && (
+                          <a
+                            href={`/critiques/${row.slug}/`}
+                            target="_blank"
+                            className="mr-3 font-semibold"
+                          >
+                            Preview
+                          </a>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Create an independent fork of “${row.title}”?`)) return;
+                            const fork = await call<any>(`/api/v1/posts/${row.id}/fork`, {
+                              method: 'POST',
+                              body: '{}',
+                            });
+                            sessionStorage.setItem('rfs-edit-post', fork.id);
+                            go('editor');
+                          }}
+                          className="mr-3 font-semibold"
+                        >
+                          Fork
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const typed = prompt(
+                              `Type the exact title to permanently delete this post:\n${row.title}`,
+                            );
+                            if (
+                              typed !== row.title ||
+                              !confirm(
+                                'This permanently deletes the post, versions, comments, bookmarks, and references. Continue?',
+                              )
+                            )
+                              return;
+                            await call(`/api/v1/posts/${row.id}`, {
+                              method: 'DELETE',
+                              body: JSON.stringify({
+                                title: typed,
+                                confirmation: 'permanently delete',
+                                reason: 'Deleted from editorial workspace',
+                              }),
+                            });
+                            load();
+                          }}
+                          className="font-semibold text-red-700"
+                        >
+                          Delete
+                        </button>
                       </>
                     )}
                     {tab === 'library' && (
                       <>
-                        <a href={`/critiques/${row.slug}/`} target="_blank" className="mr-3 font-semibold">Read</a>
-                        <button onClick={async () => { const fork = await call<any>(`/api/v1/posts/${row.id}/fork`, {method:'POST', body:'{}'}); sessionStorage.setItem('rfs-edit-post', fork.id); go('editor'); }} className="font-semibold text-accent">Fork into draft</button>
+                        <a
+                          href={`/critiques/${row.slug}/`}
+                          target="_blank"
+                          className="mr-3 font-semibold"
+                        >
+                          Read
+                        </a>
+                        <button
+                          onClick={async () => {
+                            const fork = await call<any>(`/api/v1/posts/${row.id}/fork`, {
+                              method: 'POST',
+                              body: '{}',
+                            });
+                            sessionStorage.setItem('rfs-edit-post', fork.id);
+                            go('editor');
+                          }}
+                          className="font-semibold text-accent"
+                        >
+                          Fork into draft
+                        </button>
                       </>
                     )}
                     {tab === 'reviews' && me.role === 'superadmin' && (
@@ -695,8 +777,12 @@ function Editor({ me }: { me: Me }) {
     if (!alt) return;
     const caption = prompt('Optional caption') ?? '';
     const credit = prompt('Optional credit') ?? '';
-    const placement = prompt('Placement: center, wide, full, left, right, or thumbnail', 'center') ?? 'center';
-    if (!['center', 'wide', 'full', 'left', 'right', 'thumbnail'].includes(placement)) { setError('Choose a valid image placement.'); return; }
+    const placement =
+      prompt('Placement: center, wide, full, left, right, or thumbnail', 'center') ?? 'center';
+    if (!['center', 'wide', 'full', 'left', 'right', 'thumbnail'].includes(placement)) {
+      setError('Choose a valid image placement.');
+      return;
+    }
     const form = new FormData();
     form.set('file', file);
     form.set('alt', alt);
@@ -711,7 +797,8 @@ function Editor({ me }: { me: Me }) {
         method: 'POST',
         body: JSON.stringify({ placement }),
       });
-      if (placement !== 'thumbnail') editor?.chain().focus().setImage({ src: asset.src, alt, title: caption }).run();
+      if (placement !== 'thumbnail')
+        editor?.chain().focus().setImage({ src: asset.src, alt, title: caption }).run();
       setState('Waiting to save');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Image upload failed');
@@ -724,7 +811,18 @@ function Editor({ me }: { me: Me }) {
         <section className="mt-8 grid gap-4 border border-line bg-white p-5 md:grid-cols-2">
           {compare.map((versionId) => {
             const version = versions.find((item) => item.id === versionId);
-            return <article key={versionId}><p className="text-xs font-bold uppercase tracking-widest text-accent">Version {version?.number}</p><h2 className="mt-2 font-display text-3xl">{version?.title}</h2><p className="mt-3 text-sm text-muted">{version?.excerpt}</p><pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap bg-paper p-3 text-xs">{JSON.stringify(version?.content, null, 2)}</pre></article>;
+            return (
+              <article key={versionId}>
+                <p className="text-xs font-bold uppercase tracking-widest text-accent">
+                  Version {version?.number}
+                </p>
+                <h2 className="mt-2 font-display text-3xl">{version?.title}</h2>
+                <p className="mt-3 text-sm text-muted">{version?.excerpt}</p>
+                <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap bg-paper p-3 text-xs">
+                  {JSON.stringify(version?.content, null, 2)}
+                </pre>
+              </article>
+            );
           })}
         </section>
       )}
@@ -897,34 +995,45 @@ function Editor({ me }: { me: Me }) {
                   <p className="text-xs text-muted">No checkpoints yet.</p>
                 ) : (
                   versions.slice(0, 8).map((v) => (
-                    <div
-                      key={v.id}
-                      className="border-t border-line pt-2 text-left text-xs"
-                    >
-                      <label className="mb-2 flex items-center gap-2"><input type="checkbox" checked={compare.includes(v.id)} onChange={(event) => setCompare((current) => event.target.checked ? [...current.filter((id) => id !== v.id), v.id].slice(-2) : current.filter((id) => id !== v.id))}/> Compare</label>
-                      <button onClick={async () => {
-                        if (
-                          !confirm(
-                            `Restore version ${v.number}? A new checkpoint will preserve this restore.`,
+                    <div key={v.id} className="border-t border-line pt-2 text-left text-xs">
+                      <label className="mb-2 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={compare.includes(v.id)}
+                          onChange={(event) =>
+                            setCompare((current) =>
+                              event.target.checked
+                                ? [...current.filter((id) => id !== v.id), v.id].slice(-2)
+                                : current.filter((id) => id !== v.id),
+                            )
+                          }
+                        />{' '}
+                        Compare
+                      </label>
+                      <button
+                        onClick={async () => {
+                          if (
+                            !confirm(
+                              `Restore version ${v.number}? A new checkpoint will preserve this restore.`,
+                            )
                           )
-                        )
-                          return;
-                        const p = await call<any>(`/api/v1/posts/${id}/restore/${v.id}`, {
-                          method: 'POST',
-                          body: '{}',
-                        });
-                        setTitle(p.title);
-                        setExcerpt(p.excerpt);
-                        setRevision(p.revision);
-                        editor?.commands.setContent(p.content);
-                        loadVersions(id);
-                        setState('Version restored');
-                      }}
-                      className="text-left"
-                    >
-                      <strong>v{v.number}</strong> · {v.reason}
-                      <br />
-                      <span className="text-muted">{date(v.createdAt)}</span>
+                            return;
+                          const p = await call<any>(`/api/v1/posts/${id}/restore/${v.id}`, {
+                            method: 'POST',
+                            body: '{}',
+                          });
+                          setTitle(p.title);
+                          setExcerpt(p.excerpt);
+                          setRevision(p.revision);
+                          editor?.commands.setContent(p.content);
+                          loadVersions(id);
+                          setState('Version restored');
+                        }}
+                        className="text-left"
+                      >
+                        <strong>v{v.number}</strong> · {v.reason}
+                        <br />
+                        <span className="text-muted">{date(v.createdAt)}</span>
                       </button>
                     </div>
                   ))
@@ -1120,10 +1229,36 @@ function MediaPanel() {
             className="mt-2 block w-full text-sm"
           />
         </label>
-        <label className="text-sm font-semibold">Caption<input name="caption" className="mt-2 block w-full border border-line px-3 py-2" /></label>
-        <label className="text-sm font-semibold">Credit<input name="credit" className="mt-2 block w-full border border-line px-3 py-2" /></label>
-        <label className="text-sm font-semibold">Focal point X (0 to 1)<input name="focalX" type="number" min="0" max="1" step="0.01" className="mt-2 block w-full border border-line px-3 py-2" /></label>
-        <label className="text-sm font-semibold">Focal point Y (0 to 1)<input name="focalY" type="number" min="0" max="1" step="0.01" className="mt-2 block w-full border border-line px-3 py-2" /></label>
+        <label className="text-sm font-semibold">
+          Caption
+          <input name="caption" className="mt-2 block w-full border border-line px-3 py-2" />
+        </label>
+        <label className="text-sm font-semibold">
+          Credit
+          <input name="credit" className="mt-2 block w-full border border-line px-3 py-2" />
+        </label>
+        <label className="text-sm font-semibold">
+          Focal point X (0 to 1)
+          <input
+            name="focalX"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            className="mt-2 block w-full border border-line px-3 py-2"
+          />
+        </label>
+        <label className="text-sm font-semibold">
+          Focal point Y (0 to 1)
+          <input
+            name="focalY"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            className="mt-2 block w-full border border-line px-3 py-2"
+          />
+        </label>
         <label className="text-sm font-semibold">
           Alternative text
           <input

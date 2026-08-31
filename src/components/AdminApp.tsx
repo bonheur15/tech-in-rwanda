@@ -817,7 +817,11 @@ function Editor({ me }: { me: Me }) {
         body: JSON.stringify({ placement }),
       });
       if (placement !== 'thumbnail')
-        editor?.chain().focus().setImage({ src: asset.src, alt, title: caption, placement, caption, credit } as any).run();
+        editor
+          ?.chain()
+          .focus()
+          .setImage({ src: asset.src, alt, title: caption, placement, caption, credit } as any)
+          .run();
       setState('Waiting to save');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Image upload failed');
@@ -1390,7 +1394,36 @@ function Profile({ me }: { me: Me }) {
     <>
       <Heading eyebrow="Account" title="Profile settings" />
       <form onSubmit={save} className="mt-8 max-w-2xl border border-line bg-white p-8">
-        <label className="mb-6 flex cursor-pointer items-center gap-4 border border-line p-4 text-sm font-semibold">{avatarPreview ? <img src={avatarPreview} alt="Current profile" className="size-16 rounded-full object-cover"/> : <span className="grid size-16 place-items-center rounded-full bg-paper">Photo</span>}<span>Upload profile image<input type="file" accept="image/jpeg,image/png" className="sr-only" onChange={async (event) => { const file=event.target.files?.[0]; if(!file)return; const form=new FormData(); form.set('file',file); form.set('alt',`${name} profile image`); const asset=await call<any>('/api/v1/media',{method:'POST',body:form}); setAvatarAssetId(asset.id); setAvatarPreview(asset.src); setMessage('Image ready. Save the profile to use it.'); }}/></span></label>
+        <label className="mb-6 flex cursor-pointer items-center gap-4 border border-line p-4 text-sm font-semibold">
+          {avatarPreview ? (
+            <img
+              src={avatarPreview}
+              alt="Current profile"
+              className="size-16 rounded-full object-cover"
+            />
+          ) : (
+            <span className="grid size-16 place-items-center rounded-full bg-paper">Photo</span>
+          )}
+          <span>
+            Upload profile image
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              className="sr-only"
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                const form = new FormData();
+                form.set('file', file);
+                form.set('alt', `${name} profile image`);
+                const asset = await call<any>('/api/v1/media', { method: 'POST', body: form });
+                setAvatarAssetId(asset.id);
+                setAvatarPreview(asset.src);
+                setMessage('Image ready. Save the profile to use it.');
+              }}
+            />
+          </span>
+        </label>
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="text-sm font-semibold">
             Display name

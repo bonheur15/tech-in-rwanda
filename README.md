@@ -13,7 +13,7 @@ make bootstrap-superadmin EMAIL=editor@example.com HANDLE=editor NAME="First Edi
 make dev
 ```
 
-Open `http://127.0.0.1:4321/` for the publication and `/workspace/` for staff. Development OTP codes are printed only by the Go terminal mailer. The terminal sender is rejected when `APP_ENV=production`.
+Open `http://127.0.0.1:4321/` for the publication. Staff enter the private newsroom directly at `/admin`; it is intentionally absent from public navigation. Development OTP codes are printed only by the Go terminal mailer. The terminal sender is rejected when `APP_ENV=production`.
 
 `make dev` starts Astro on 4321 and Go on 8787 with coordinated shutdown. Astro proxies `/api/*` and `/media/*`, so browsers always use a same-origin API. Local data lives under `.data/`.
 

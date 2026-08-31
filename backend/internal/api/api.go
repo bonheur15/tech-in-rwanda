@@ -26,12 +26,14 @@ import (
 )
 
 type API struct {
-	DB        *sql.DB
-	Auth      *auth.Service
-	Editorial *editorial.Service
-	Logger    *slog.Logger
-	Origin    string
-	MediaDir  string
+	DB          *sql.DB
+	Auth        *auth.Service
+	Editorial   *editorial.Service
+	Logger      *slog.Logger
+	Origin      string
+	MediaDir    string
+	MailMode    string
+	Development bool
 }
 
 func (a *API) Routes() http.Handler {
@@ -39,19 +41,29 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/healthz", a.health)
 	mux.HandleFunc("POST /api/v1/auth/{kind}/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/{kind}/verify-otp", a.verifyOTP)
+	mux.HandleFunc("GET /api/v1/auth/me", a.withActor(a.me))
+	mux.HandleFunc("POST /api/v1/auth/logout", a.withMutation(a.logout))
 	mux.HandleFunc("GET /api/v1/sessions", a.withActor(a.sessions))
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", a.withMutation(a.revokeSession))
 	mux.HandleFunc("POST /api/v1/reader/onboarding", a.withMutation(a.onboard))
+	mux.HandleFunc("DELETE /api/v1/reader/account", a.withMutation(a.deleteReaderAccount))
 	mux.HandleFunc("GET /api/v1/public/posts", a.publicPosts)
 	mux.HandleFunc("GET /api/v1/public/posts/{slug}", a.publicPost)
 	mux.HandleFunc("GET /api/v1/search", a.search)
+	mux.HandleFunc("GET /api/v1/categories", a.categories)
+	mux.HandleFunc("POST /api/v1/categories", a.withMutation(a.createCategory))
+	mux.HandleFunc("GET /api/v1/tags", a.tags)
+	mux.HandleFunc("POST /api/v1/tags", a.withMutation(a.createTag))
+	mux.HandleFunc("GET /api/v1/public/authors/{handle}", a.publicAuthor)
 	mux.HandleFunc("POST /api/v1/posts", a.withMutation(a.createPost))
 	mux.HandleFunc("GET /api/v1/posts/{id}/draft", a.withActor(a.getDraft))
 	mux.HandleFunc("PUT /api/v1/posts/{id}/draft", a.withMutation(a.saveDraft))
+	mux.HandleFunc("PATCH /api/v1/posts/{id}/metadata", a.withMutation(a.updatePostMetadata))
 	mux.HandleFunc("POST /api/v1/posts/{id}/checkpoint", a.withMutation(a.checkpoint))
 	mux.HandleFunc("POST /api/v1/posts/{id}/submit", a.withMutation(a.submit))
 	mux.HandleFunc("POST /api/v1/posts/{id}/publish", a.withMutation(a.publish))
 	mux.HandleFunc("POST /api/v1/posts/{id}/fork", a.withMutation(a.fork))
+	mux.HandleFunc("POST /api/v1/posts/{id}/media/{asset}", a.withMutation(a.attachMedia))
 	mux.HandleFunc("GET /api/v1/posts/{id}/versions", a.withActor(a.versions))
 	mux.HandleFunc("POST /api/v1/posts/{id}/restore/{version}", a.withMutation(a.restoreVersion))
 	mux.HandleFunc("DELETE /api/v1/posts/{id}", a.withMutation(a.deletePost))
@@ -62,10 +74,21 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/bookmarks", a.withActor(a.bookmarks))
 	mux.HandleFunc("GET /api/v1/articles/{id}/comments", a.comments)
 	mux.HandleFunc("POST /api/v1/articles/{id}/comments", a.withMutation(a.addComment))
+	mux.HandleFunc("PATCH /api/v1/comments/{id}", a.withMutation(a.editComment))
+	mux.HandleFunc("POST /api/v1/comments/{id}/reports", a.withMutation(a.reportComment))
 	mux.HandleFunc("POST /api/v1/admin/comments/{id}/{action}", a.withMutation(a.moderate))
 	mux.HandleFunc("GET /api/v1/admin/staff", a.withActor(a.staff))
 	mux.HandleFunc("POST /api/v1/admin/staff", a.withMutation(a.addStaff))
 	mux.HandleFunc("PATCH /api/v1/admin/staff/{id}", a.withMutation(a.updateStaff))
+	mux.HandleFunc("GET /api/v1/admin/overview", a.withActor(a.adminOverview))
+	mux.HandleFunc("GET /api/v1/admin/posts", a.withActor(a.adminPosts))
+	mux.HandleFunc("GET /api/v1/admin/reviews", a.withActor(a.adminReviews))
+	mux.HandleFunc("GET /api/v1/admin/comments", a.withActor(a.adminComments))
+	mux.HandleFunc("GET /api/v1/admin/media", a.withActor(a.adminMedia))
+	mux.HandleFunc("GET /api/v1/admin/readers", a.withActor(a.adminReaders))
+	mux.HandleFunc("PATCH /api/v1/admin/readers/{id}", a.withMutation(a.updateReader))
+	mux.HandleFunc("GET /api/v1/admin/audit", a.withActor(a.adminAudit))
+	mux.HandleFunc("PATCH /api/v1/account/profile", a.withMutation(a.updateProfile))
 	mux.HandleFunc("POST /api/v1/media", a.withMutation(a.uploadMedia))
 	mux.HandleFunc("GET /media/{hash}/{file}", a.serveMedia)
 	return mux
@@ -138,7 +161,14 @@ func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 		httpx.Failure(w, r, 429, "request_rejected", err.Error())
 		return
 	}
-	httpx.JSON(w, 202, map[string]bool{"accepted": true})
+	if err != nil {
+		a.Logger.Error("staff OTP delivery failed", "error", err)
+	}
+	data := map[string]any{"accepted": true}
+	if a.Development && a.MailMode == "terminal" {
+		data["delivery"] = "terminal"
+	}
+	httpx.JSON(w, 202, data)
 }
 func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 	kind := r.PathValue("kind")
@@ -204,6 +234,38 @@ func (a *API) onboard(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 }
 func (a *API) publicPosts(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	category, tag := strings.TrimSpace(r.URL.Query().Get("category")), strings.TrimSpace(r.URL.Query().Get("tag"))
+	if category != "" || tag != "" {
+		query := "SELECT p.id,p.owner_id,v.title,p.slug,v.excerpt,p.state,p.published_at,s.display_name,s.handle,COALESCE(c.slug,'') FROM posts p JOIN post_versions v ON v.id=p.published_version_id JOIN staff_profiles s ON s.identity_id=p.owner_id LEFT JOIN categories c ON c.id=p.category_id WHERE p.state='published'"
+		args := []any{}
+		if category != "" {
+			query += " AND c.slug=?"
+			args = append(args, category)
+		}
+		if tag != "" {
+			query += " AND EXISTS(SELECT 1 FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=p.id AND t.slug=?)"
+			args = append(args, tag)
+		}
+		query += " ORDER BY p.published_at DESC LIMIT 50"
+		rows, err := a.DB.QueryContext(r.Context(), query, args...)
+		if err != nil {
+			respond(w, r, nil, err, 0)
+			return
+		}
+		defer rows.Close()
+		out := []map[string]any{}
+		for rows.Next() {
+			var id, owner, title, slug, excerpt, state, published, name, handle, cat string
+			if err = rows.Scan(&id, &owner, &title, &slug, &excerpt, &state, &published, &name, &handle, &cat); err != nil {
+				respond(w, r, nil, err, 0)
+				return
+			}
+			out = append(out, map[string]any{"id": id, "ownerId": owner, "title": title, "slug": slug, "excerpt": excerpt, "state": state, "publishedAt": published, "author": name, "authorHandle": handle, "category": cat})
+		}
+		w.Header().Set("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
+		httpx.JSON(w, 200, out)
+		return
+	}
 	posts, err := a.Editorial.Latest(r.Context(), limit)
 	if err != nil {
 		httpx.Failure(w, r, 500, "database_error", "Could not load posts")
@@ -211,6 +273,60 @@ func (a *API) publicPosts(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
 	httpx.JSON(w, 200, posts)
+}
+
+func (a *API) categories(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT c.id,c.name,c.slug,c.description,count(p.id) FROM categories c LEFT JOIN posts p ON p.category_id=c.id AND p.state='published' GROUP BY c.id ORDER BY c.name")
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, name, slug, description string
+		var count int
+		rows.Scan(&id, &name, &slug, &description, &count)
+		out = append(out, map[string]any{"id": id, "name": name, "slug": slug, "description": description, "postCount": count})
+	}
+	httpx.JSON(w, 200, out)
+}
+func (a *API) tags(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT t.id,t.name,t.slug,count(p.id) FROM tags t LEFT JOIN post_tags pt ON pt.tag_id=t.id LEFT JOIN posts p ON p.id=pt.post_id AND p.state='published' GROUP BY t.id ORDER BY t.name")
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, name, slug string
+		var count int
+		rows.Scan(&id, &name, &slug, &count)
+		out = append(out, map[string]any{"id": id, "name": name, "slug": slug, "postCount": count})
+	}
+	httpx.JSON(w, 200, out)
+}
+func (a *API) publicAuthor(w http.ResponseWriter, r *http.Request) {
+	var id, handle, name, bio string
+	err := a.DB.QueryRowContext(r.Context(), "SELECT s.identity_id,s.handle,s.display_name,s.bio FROM staff_profiles s WHERE s.handle=? OR s.identity_id=(SELECT identity_id FROM staff_handle_aliases WHERE handle=?)", r.PathValue("handle"), r.PathValue("handle")).Scan(&id, &handle, &name, &bio)
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT p.id,p.title,p.slug,p.excerpt,p.published_at FROM posts p WHERE p.owner_id=? AND p.state='published' ORDER BY p.published_at DESC", id)
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	defer rows.Close()
+	posts := []map[string]any{}
+	for rows.Next() {
+		var postID, title, slug, excerpt, published string
+		rows.Scan(&postID, &title, &slug, &excerpt, &published)
+		posts = append(posts, map[string]any{"id": postID, "title": title, "slug": slug, "excerpt": excerpt, "publishedAt": published})
+	}
+	httpx.JSON(w, 200, map[string]any{"id": id, "handle": handle, "displayName": name, "bio": bio, "posts": posts})
 }
 func (a *API) publicPost(w http.ResponseWriter, r *http.Request) {
 	p, err := a.Editorial.Public(r.Context(), r.PathValue("slug"))

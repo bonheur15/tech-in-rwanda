@@ -264,10 +264,14 @@ func (s *Service) Fork(ctx context.Context, a auth.Actor, postID string) (Post, 
 	if err != nil {
 		return p, err
 	}
-	_, err = s.DB.ExecContext(ctx, "UPDATE posts SET source_post_id=?,source_version_id=? WHERE id=?", postID, version, p.ID)
-	if err == nil {
-		_, err = s.Checkpoint(ctx, a, p.ID, "fork")
-	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil { return p, err }
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, "UPDATE posts SET source_post_id=?,source_version_id=?,category_id=(SELECT category_id FROM posts WHERE id=?),thumbnail_asset_id=(SELECT thumbnail_asset_id FROM posts WHERE id=?) WHERE id=?", postID, version, postID, postID, p.ID)
+	if err == nil { _, err = tx.ExecContext(ctx, "INSERT INTO post_tags(post_id,tag_id) SELECT ?,tag_id FROM post_tags WHERE post_id=?", p.ID, postID) }
+	if err == nil { _, err = tx.ExecContext(ctx, "INSERT INTO article_media(post_id,asset_id,placement) SELECT ?,asset_id,placement FROM article_media WHERE post_id=?", p.ID, postID) }
+	if err == nil { err = tx.Commit() }
+	if err == nil { _, err = s.Checkpoint(ctx, a, p.ID, "fork") }
 	return p, err
 }
 func (s *Service) Public(ctx context.Context, slug string) (Post, error) {

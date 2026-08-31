@@ -1,0 +1,6 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ReaderAccount from '../../components/ReaderAccount';
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '1x00000000000000000000AA';
+---
+<BaseLayout title="Reader account | Rwanda Free Space"><main id="main-content" class="mx-auto min-h-[65vh] max-w-5xl px-[clamp(1.25rem,4vw,4rem)] py-16"><ReaderAccount siteKey={siteKey} client:load /></main></BaseLayout>

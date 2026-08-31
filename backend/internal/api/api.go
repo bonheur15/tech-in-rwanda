@@ -46,6 +46,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions", a.withActor(a.sessions))
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", a.withMutation(a.revokeSession))
 	mux.HandleFunc("POST /api/v1/reader/onboarding", a.withMutation(a.onboard))
+	mux.HandleFunc("PATCH /api/v1/reader/profile", a.withMutation(a.updateReaderProfile))
+	mux.HandleFunc("GET /api/v1/reader/comments", a.withActor(a.readerComments))
 	mux.HandleFunc("DELETE /api/v1/reader/account", a.withMutation(a.deleteReaderAccount))
 	mux.HandleFunc("GET /api/v1/public/posts", a.publicPosts)
 	mux.HandleFunc("GET /api/v1/public/posts/{slug}", a.publicPost)
@@ -55,6 +57,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/tags", a.tags)
 	mux.HandleFunc("POST /api/v1/tags", a.withMutation(a.createTag))
 	mux.HandleFunc("GET /api/v1/public/authors/{handle}", a.publicAuthor)
+	mux.HandleFunc("GET /api/v1/public/readers/{username}", a.publicReader)
 	mux.HandleFunc("POST /api/v1/posts", a.withMutation(a.createPost))
 	mux.HandleFunc("GET /api/v1/posts/{id}/draft", a.withActor(a.getDraft))
 	mux.HandleFunc("PUT /api/v1/posts/{id}/draft", a.withMutation(a.saveDraft))
@@ -84,6 +87,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/posts", a.withActor(a.adminPosts))
 	mux.HandleFunc("GET /api/v1/admin/reviews", a.withActor(a.adminReviews))
 	mux.HandleFunc("GET /api/v1/admin/comments", a.withActor(a.adminComments))
+	mux.HandleFunc("GET /api/v1/admin/reports", a.withActor(a.adminReports))
+	mux.HandleFunc("POST /api/v1/admin/reports/{id}/resolve", a.withMutation(a.resolveReport))
 	mux.HandleFunc("GET /api/v1/admin/media", a.withActor(a.adminMedia))
 	mux.HandleFunc("GET /api/v1/admin/readers", a.withActor(a.adminReaders))
 	mux.HandleFunc("PATCH /api/v1/admin/readers/{id}", a.withMutation(a.updateReader))
@@ -99,8 +104,13 @@ type actorKey struct{}
 
 func (a *API) withActor(next handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		kind := actorKindForRequest(r)
+		names := []string{auth.StaffCookie, "rfs_staff_session"}
+		if kind == "reader" {
+			names = []string{auth.ReaderCookie, "rfs_reader_session"}
+		}
 		token := ""
-		for _, name := range []string{auth.StaffCookie, auth.ReaderCookie, "rfs_staff_session", "rfs_reader_session"} {
+		for _, name := range names {
 			if c, e := r.Cookie(name); e == nil {
 				token = c.Value
 				break
@@ -113,6 +123,18 @@ func (a *API) withActor(next handler) http.HandlerFunc {
 		}
 		next(w, r, actor)
 	}
+}
+
+func actorKindForRequest(r *http.Request) string {
+	if requested := r.URL.Query().Get("kind"); requested == "reader" || requested == "staff" {
+		return requested
+	}
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/v1/reader/") || strings.HasPrefix(path, "/api/v1/articles/") ||
+		strings.HasPrefix(path, "/api/v1/comments/") || strings.HasPrefix(path, "/api/v1/bookmarks") {
+		return "reader"
+	}
+	return "staff"
 }
 func (a *API) withMutation(next handler) http.HandlerFunc {
 	return a.withActor(func(w http.ResponseWriter, r *http.Request, actor auth.Actor) {
@@ -393,7 +415,7 @@ func (a *API) versions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 		respond(w, r, nil, err, 0)
 		return
 	}
-	rows, err := a.DB.QueryContext(r.Context(), "SELECT id,number,title,excerpt,reason,created_by,created_at FROM post_versions WHERE post_id=? ORDER BY number DESC LIMIT 100", r.PathValue("id"))
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT id,number,title,excerpt,content_json,reason,created_by,created_at FROM post_versions WHERE post_id=? ORDER BY number DESC LIMIT 100", r.PathValue("id"))
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
@@ -401,13 +423,13 @@ func (a *API) versions(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	defer rows.Close()
 	out := []map[string]any{}
 	for rows.Next() {
-		var id, title, excerpt, reason, by, at string
+		var id, title, excerpt, content, reason, by, at string
 		var number int
-		if err = rows.Scan(&id, &number, &title, &excerpt, &reason, &by, &at); err != nil {
+		if err = rows.Scan(&id, &number, &title, &excerpt, &content, &reason, &by, &at); err != nil {
 			respond(w, r, nil, err, 0)
 			return
 		}
-		out = append(out, map[string]any{"id": id, "number": number, "title": title, "excerpt": excerpt, "reason": reason, "createdBy": by, "createdAt": at})
+		out = append(out, map[string]any{"id": id, "number": number, "title": title, "excerpt": excerpt, "content": json.RawMessage(content), "reason": reason, "createdBy": by, "createdAt": at})
 	}
 	httpx.JSON(w, http.StatusOK, out)
 }
@@ -538,7 +560,16 @@ func (a *API) bookmarks(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	httpx.JSON(w, 200, out)
 }
 func (a *API) comments(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.DB.QueryContext(r.Context(), "SELECT c.id,COALESCE(r.username,'deleted_reader'),COALESCE(v.body,'[deleted]'),c.parent_id,c.depth,c.created_at FROM comments c LEFT JOIN reader_profiles r ON r.identity_id=c.reader_id LEFT JOIN comment_versions v ON v.id=c.public_version_id WHERE c.post_id=? AND c.status='approved' ORDER BY c.created_at", r.PathValue("id"))
+	readerID := ""
+	for _, name := range []string{auth.ReaderCookie, "rfs_reader_session"} {
+		if cookie, err := r.Cookie(name); err == nil {
+			if actor, authErr := a.Auth.Authenticate(r.Context(), cookie.Value); authErr == nil && actor.Kind == "reader" {
+				readerID = actor.IdentityID
+			}
+			break
+		}
+	}
+	rows, err := a.DB.QueryContext(r.Context(), "SELECT c.id,COALESCE(r.username,'deleted_reader'),COALESCE(CASE WHEN c.status='approved' THEN public.body ELSE pending.body END,'[deleted]'),c.parent_id,c.depth,c.created_at,c.status,c.reader_id=? FROM comments c LEFT JOIN reader_profiles r ON r.identity_id=c.reader_id LEFT JOIN comment_versions public ON public.id=c.public_version_id LEFT JOIN comment_versions pending ON pending.id=c.pending_version_id WHERE c.post_id=? AND (c.status='approved' OR (c.reader_id=? AND c.status='pending')) ORDER BY c.created_at", readerID, r.PathValue("id"), readerID)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
@@ -546,11 +577,12 @@ func (a *API) comments(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	out := []map[string]any{}
 	for rows.Next() {
-		var id, user, body, created string
+		var id, user, body, created, status string
 		var parent *string
 		var depth int
-		rows.Scan(&id, &user, &body, &parent, &depth, &created)
-		out = append(out, map[string]any{"id": id, "username": user, "body": body, "parentId": parent, "depth": depth, "createdAt": created})
+		var mine bool
+		rows.Scan(&id, &user, &body, &parent, &depth, &created, &status, &mine)
+		out = append(out, map[string]any{"id": id, "username": user, "body": body, "parentId": parent, "depth": depth, "createdAt": created, "status": status, "mine": mine})
 	}
 	httpx.JSON(w, 200, out)
 }

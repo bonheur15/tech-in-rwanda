@@ -58,8 +58,11 @@ type SiteVerifier struct {
 	Client *http.Client
 }
 type DevelopmentVerifier struct{}
+
 func (DevelopmentVerifier) Verify(_ context.Context, token, _ string) error {
-	if token != "rfs-development-turnstile" { return errors.New("development challenge failed") }
+	if token != "rfs-development-turnstile" {
+		return errors.New("development challenge failed")
+	}
 	return nil
 }
 
@@ -241,6 +244,15 @@ func (s *Service) VerifyOTP(ctx context.Context, kind, email, code, userAgent, i
 			_, e = tx.ExecContext(ctx, "INSERT INTO identities(id,email,created_at,updated_at)VALUES(?,?,?,?)", identityID, normalized, stamp, stamp)
 		}
 		if e != nil {
+			return "", "", actor, e
+		}
+		_, _ = tx.ExecContext(ctx, "UPDATE reader_profiles SET status='active' WHERE identity_id=? AND status='suspended' AND NOT EXISTS(SELECT 1 FROM account_suspensions WHERE identity_id=? AND (ends_at IS NULL OR ends_at>?))", identityID, identityID, now.Format(time.RFC3339Nano))
+		var profileStatus string
+		e = tx.QueryRowContext(ctx, "SELECT status FROM reader_profiles WHERE identity_id=?", identityID).Scan(&profileStatus)
+		if e == nil && profileStatus != "active" {
+			return "", "", actor, ErrUnauthorized
+		}
+		if e != nil && !errors.Is(e, sql.ErrNoRows) {
 			return "", "", actor, e
 		}
 	}

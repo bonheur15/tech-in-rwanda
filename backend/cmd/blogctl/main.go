@@ -54,12 +54,14 @@ func main() {
 		verify(os.Args[2])
 	case "media-check":
 		mediaCheck(db, cfg.MediaDir)
+	case "media-cleanup":
+		mediaCleanup(db, cfg.MediaDir)
 	default:
 		usage()
 	}
 }
 func usage() {
-	fmt.Fprintln(os.Stderr, "blogctl: migrate-status | bootstrap-superadmin EMAIL HANDLE DISPLAY_NAME | recover-account EMAIL | backup FILE | verify-backup FILE | media-check")
+	fmt.Fprintln(os.Stderr, "blogctl: migrate-status | bootstrap-superadmin EMAIL HANDLE DISPLAY_NAME | recover-account EMAIL | backup FILE | verify-backup FILE | media-check | media-cleanup")
 	os.Exit(2)
 }
 func fatal(err error) {
@@ -155,6 +157,10 @@ func verify(path string) {
 	tr := tar.NewReader(gz)
 	var m manifest
 	seen := map[string]string{}
+	databaseCopy, err := os.CreateTemp("", "rfs-verify-*.sqlite3")
+	fatal(err)
+	databaseCopy.Close()
+	defer os.Remove(databaseCopy.Name())
 	for {
 		h, err := tr.Next()
 		if err == io.EOF {
@@ -166,7 +172,15 @@ func verify(path string) {
 			continue
 		}
 		hash := sha256.New()
-		_, err = io.Copy(hash, tr)
+		writer := io.Writer(hash)
+		var dbFile *os.File
+		if h.Name == "database/blog.sqlite3" {
+			dbFile, err = os.OpenFile(databaseCopy.Name(), os.O_WRONLY|os.O_TRUNC, 0o600)
+			fatal(err)
+			writer = io.MultiWriter(hash, dbFile)
+		}
+		_, err = io.Copy(writer, tr)
+		if dbFile != nil { fatal(dbFile.Close()) }
 		fatal(err)
 		seen[h.Name] = hex.EncodeToString(hash.Sum(nil))
 	}
@@ -178,6 +192,16 @@ func verify(path string) {
 			fatal(fmt.Errorf("media checksum mismatch: %s", name))
 		}
 	}
+	verificationDB, err := sql.Open("sqlite", databaseCopy.Name())
+	fatal(err)
+	defer verificationDB.Close()
+	var integrity string
+	fatal(verificationDB.QueryRow("PRAGMA integrity_check").Scan(&integrity))
+	if integrity != "ok" { fatal(fmt.Errorf("SQLite integrity check failed: %s", integrity)) }
+	rows, err := verificationDB.Query("PRAGMA foreign_key_check")
+	fatal(err)
+	if rows.Next() { rows.Close(); fatal(fmt.Errorf("SQLite foreign key check failed")) }
+	fatal(rows.Close())
 	fmt.Println("backup verified")
 }
 func mediaCheck(db *sql.DB, dir string) {
@@ -185,18 +209,47 @@ func mediaCheck(db *sql.DB, dir string) {
 	fatal(err)
 	defer rows.Close()
 	missing := 0
+	known := map[string]bool{}
 	for rows.Next() {
 		var id, hash string
 		rows.Scan(&id, &hash)
-		if _, err = os.Stat(filepath.Join(dir, hash)); err != nil {
-			fmt.Println("missing", id, hash)
-			missing++
+		known[hash] = true
+		for _, derivative := range []string{"original.jpg", "large.jpg", "medium.jpg", "small.jpg"} {
+			if _, err = os.Stat(filepath.Join(dir, hash, derivative)); err != nil {
+				fmt.Println("missing", id, hash, derivative)
+				missing++
+			}
 		}
+	}
+	entries, _ := os.ReadDir(dir)
+	for _, entry := range entries {
+		if entry.IsDir() && !known[entry.Name()] { fmt.Println("untracked", entry.Name()); missing++ }
 	}
 	if missing > 0 {
 		os.Exit(1)
 	}
 	fmt.Println("media consistent")
+}
+func mediaCleanup(db *sql.DB, dir string) {
+	cutoff := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(time.RFC3339Nano)
+	rows, err := db.Query("SELECT id,content_hash FROM media_assets m WHERE m.status='orphaned' AND m.orphaned_at<? AND NOT EXISTS(SELECT 1 FROM article_media am WHERE am.asset_id=m.id) AND NOT EXISTS(SELECT 1 FROM posts p WHERE p.thumbnail_asset_id=m.id)", cutoff)
+	fatal(err)
+	defer rows.Close()
+	type candidate struct{ id, hash string }
+	items := []candidate{}
+	for rows.Next() { var item candidate; fatal(rows.Scan(&item.id, &item.hash)); items = append(items, item) }
+	fatal(rows.Err())
+	for _, item := range items {
+		original := filepath.Join(dir, item.hash)
+		quarantine := filepath.Join(dir, ".purge-"+item.id)
+		if err = os.Rename(original, quarantine); err != nil && !os.IsNotExist(err) { fatal(err) }
+		result, deleteErr := db.Exec("DELETE FROM media_assets WHERE id=? AND status='orphaned' AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?)", item.id, item.id, item.id)
+		if deleteErr != nil { _ = os.Rename(quarantine, original); fatal(deleteErr) }
+		deleted, _ := result.RowsAffected()
+		if deleted == 0 { _ = os.Rename(quarantine, original); continue }
+		fatal(os.RemoveAll(quarantine))
+	}
+	fmt.Println("orphaned media purged:", len(items))
 }
 func hashFile(path string) string {
 	f, err := os.Open(path)

@@ -137,7 +137,16 @@ func (a *API) deleteReaderAccount(w http.ResponseWriter, r *http.Request, x auth
 		_, err = tx.ExecContext(r.Context(), "UPDATE comments SET reader_id=NULL WHERE reader_id=?", x.IdentityID)
 	}
 	if err == nil {
-		_, err = tx.ExecContext(r.Context(), "DELETE FROM bookmarks WHERE reader_id=?; DELETE FROM otp_challenges WHERE identity_kind='reader' AND email=(SELECT email FROM identities WHERE id=?); DELETE FROM sessions WHERE identity_id=? AND kind='reader'; DELETE FROM reader_profiles WHERE identity_id=?", x.IdentityID, x.IdentityID, x.IdentityID, x.IdentityID)
+		_, err = tx.ExecContext(r.Context(), "DELETE FROM bookmarks WHERE reader_id=?", x.IdentityID)
+	}
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), "DELETE FROM otp_challenges WHERE identity_kind='reader' AND email=(SELECT email FROM identities WHERE id=?)", x.IdentityID)
+	}
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), "DELETE FROM sessions WHERE identity_id=? AND kind='reader'", x.IdentityID)
+	}
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), "DELETE FROM reader_profiles WHERE identity_id=?", x.IdentityID)
 	}
 	if err == nil {
 		var staff int

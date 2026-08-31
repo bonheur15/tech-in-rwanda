@@ -736,17 +736,39 @@ func respond(w http.ResponseWriter, r *http.Request, data any, err error, status
 		httpx.JSON(w, status, data)
 		return
 	}
-	code := 500
+	status, code, message := publicError(err)
+	httpx.Failure(w, r, status, code, message)
+}
+
+func publicError(err error) (int, string, string) {
 	if errors.Is(err, auth.ErrUnauthorized) {
-		code = 403
-	} else if errors.Is(err, sql.ErrNoRows) {
-		code = 404
-	} else if strings.Contains(err.Error(), "conflict") {
-		code = 409
-	} else {
-		code = 400
+		return http.StatusForbidden, "forbidden", "You do not have permission to perform this action"
 	}
-	httpx.Failure(w, r, code, "request_failed", err.Error())
+	if errors.Is(err, sql.ErrNoRows) {
+		return http.StatusNotFound, "not_found", "The requested resource was not found"
+	}
+	if errors.Is(err, auth.ErrDelivery) {
+		return http.StatusServiceUnavailable, "delivery_unavailable", "The verification code could not be delivered. Please try again"
+	}
+
+	message := err.Error()
+	safeValidation := []string{
+		"invalid cursor", "invalid email", "verification failed", "wait before requesting another code",
+		"too many requests", "missing turnstile token", "turnstile verification failed",
+		"document is too large", "content must be a TipTap document", "document structure is too complex",
+		"unsupported content node", "only H2 and H3 headings are supported",
+		"images require a managed media URL and alternative text", "unsupported image placement",
+		"unsupported text formatting", "unsupported link URL",
+	}
+	for _, safe := range safeValidation {
+		if message == safe {
+			return http.StatusBadRequest, "invalid_request", message
+		}
+	}
+	if message == "draft is frozen" || message == "account does not require review" || strings.Contains(message, "conflict") {
+		return http.StatusConflict, "conflict", message
+	}
+	return http.StatusInternalServerError, "internal_error", "The request could not be completed"
 }
 func (a *API) bookmark(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	if x.Kind != "reader" || x.Status != "active" {

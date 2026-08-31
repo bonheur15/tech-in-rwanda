@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+const username = Astro.params.username ?? '';
+const origin = process.env.INTERNAL_API_URL ?? import.meta.env.INTERNAL_API_URL ?? Astro.url.origin;
+const response = await fetch(`${origin}/api/v1/public/readers/${encodeURIComponent(username)}`);
+if (!response.ok) return Astro.redirect('/404');
+const reader = (await response.json()).data;
+---
+<BaseLayout title={`@${reader.username} | Rwanda Free Space`} description={`Reader profile for @${reader.username}`}>
+  <main id="main-content" class="mx-auto max-w-3xl px-[clamp(1.25rem,4vw,4.5rem)] py-[clamp(4rem,8vw,8rem)]">
+    <p class="text-xs font-bold uppercase tracking-widest text-accent">Reader profile</p>
+    <h1 class="mt-4 font-display text-[clamp(3rem,8vw,6rem)] leading-none">@{reader.username}</h1>
+    <dl class="mt-10 grid gap-5 border-t border-line pt-6 sm:grid-cols-2">
+      <div><dt class="text-xs font-bold uppercase tracking-widest text-muted">Avatar</dt><dd class="mt-2 capitalize">{reader.avatar}</dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-widest text-muted">Joined</dt><dd class="mt-2">{new Date(reader.joinedAt).toLocaleDateString('en-RW', { dateStyle: 'long' })}</dd></div>
+      {reader.emailVisible && <div><dt class="text-xs font-bold uppercase tracking-widest text-muted">Email</dt><dd class="mt-2">{reader.email}</dd></div>}
+    </dl>
+  </main>
+</BaseLayout>

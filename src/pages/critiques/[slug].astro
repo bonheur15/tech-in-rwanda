@@ -27,9 +27,9 @@ const readTime = Math.max(1, Math.ceil(words / 220));
       class="mx-auto mt-16 max-w-4xl border-b border-line pb-12 text-center"
     >
       {
-        post.sourcePostId && (
+        post.sourceSlug && (
           <p class="mb-4 text-xs font-bold uppercase tracking-widest text-accent">
-            Forked critique
+            Forked from <a class="underline" href={`/critiques/${post.sourceSlug}/`}>an earlier critique</a>
           </p>
         )
       }
@@ -42,7 +42,7 @@ const readTime = Math.max(1, Math.ceil(words / 220));
         {post.excerpt}
       </p>
       <p class="mt-8 text-xs uppercase tracking-widest text-muted">
-        {readTime} min read · {
+        By <a class="underline" href={`/authors/${post.authorHandle}/`}>{post.author}</a> · {readTime} min read · {
           post.publishedAt &&
             new Date(post.publishedAt).toLocaleDateString("en-RW", {
               dateStyle: "long",
@@ -50,6 +50,10 @@ const readTime = Math.max(1, Math.ceil(words / 220));
             })
         }
       </p>
+      {(post.category || post.tags?.length) && <nav class="mt-5 flex flex-wrap justify-center gap-3 text-xs font-semibold uppercase tracking-wider">
+        {post.category && <a href={`/categories/${post.categorySlug}/`} class="border border-line px-3 py-1.5">{post.category}</a>}
+        {post.tags?.map((tag: any) => <a href={`/tags/${tag.slug}/`} class="border border-line px-3 py-1.5">#{tag.name}</a>)}
+      </nav>}
     </header>
     <article class="article-body mx-auto mt-16 max-w-3xl">
       {

@@ -25,7 +25,7 @@ func TestActorKindForRequest(t *testing.T) {
 
 func TestMutationOriginAllowsConfiguredDevelopmentAliases(t *testing.T) {
 	a := &API{Origin: "http://127.0.0.1:4321", AllowedOrigins: map[string]struct{}{"http://localhost:4321": {}}}
-	if !a.originAllowed("http://127.0.0.1:4321") || !a.originAllowed("http://localhost:4321") || a.originAllowed("https://attacker.example") {
-		t.Fatal("origin allowlist is inconsistent")
-	}
+	if !a.originAllowed("http://127.0.0.1:4321") || a.originAllowed("http://localhost:4321") || a.originAllowed("https://attacker.example") || a.originAllowed("") { t.Fatal("production origin policy is not same-origin") }
+	a.Development = true
+	if !a.originAllowed("") || !a.originAllowed("http://localhost:4321") { t.Fatal("development origin aliases were rejected") }
 }

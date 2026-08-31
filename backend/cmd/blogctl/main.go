@@ -180,7 +180,9 @@ func verify(path string) {
 			writer = io.MultiWriter(hash, dbFile)
 		}
 		_, err = io.Copy(writer, tr)
-		if dbFile != nil { fatal(dbFile.Close()) }
+		if dbFile != nil {
+			fatal(dbFile.Close())
+		}
 		fatal(err)
 		seen[h.Name] = hex.EncodeToString(hash.Sum(nil))
 	}
@@ -197,10 +199,15 @@ func verify(path string) {
 	defer verificationDB.Close()
 	var integrity string
 	fatal(verificationDB.QueryRow("PRAGMA integrity_check").Scan(&integrity))
-	if integrity != "ok" { fatal(fmt.Errorf("SQLite integrity check failed: %s", integrity)) }
+	if integrity != "ok" {
+		fatal(fmt.Errorf("SQLite integrity check failed: %s", integrity))
+	}
 	rows, err := verificationDB.Query("PRAGMA foreign_key_check")
 	fatal(err)
-	if rows.Next() { rows.Close(); fatal(fmt.Errorf("SQLite foreign key check failed")) }
+	if rows.Next() {
+		rows.Close()
+		fatal(fmt.Errorf("SQLite foreign key check failed"))
+	}
 	fatal(rows.Close())
 	fmt.Println("backup verified")
 }
@@ -223,7 +230,10 @@ func mediaCheck(db *sql.DB, dir string) {
 	}
 	entries, _ := os.ReadDir(dir)
 	for _, entry := range entries {
-		if entry.IsDir() && !known[entry.Name()] { fmt.Println("untracked", entry.Name()); missing++ }
+		if entry.IsDir() && !known[entry.Name()] {
+			fmt.Println("untracked", entry.Name())
+			missing++
+		}
 	}
 	if missing > 0 {
 		os.Exit(1)
@@ -237,16 +247,28 @@ func mediaCleanup(db *sql.DB, dir string) {
 	defer rows.Close()
 	type candidate struct{ id, hash string }
 	items := []candidate{}
-	for rows.Next() { var item candidate; fatal(rows.Scan(&item.id, &item.hash)); items = append(items, item) }
+	for rows.Next() {
+		var item candidate
+		fatal(rows.Scan(&item.id, &item.hash))
+		items = append(items, item)
+	}
 	fatal(rows.Err())
 	for _, item := range items {
 		original := filepath.Join(dir, item.hash)
 		quarantine := filepath.Join(dir, ".purge-"+item.id)
-		if err = os.Rename(original, quarantine); err != nil && !os.IsNotExist(err) { fatal(err) }
+		if err = os.Rename(original, quarantine); err != nil && !os.IsNotExist(err) {
+			fatal(err)
+		}
 		result, deleteErr := db.Exec("DELETE FROM media_assets WHERE id=? AND status='orphaned' AND NOT EXISTS(SELECT 1 FROM article_media WHERE asset_id=?) AND NOT EXISTS(SELECT 1 FROM posts WHERE thumbnail_asset_id=?)", item.id, item.id, item.id)
-		if deleteErr != nil { _ = os.Rename(quarantine, original); fatal(deleteErr) }
+		if deleteErr != nil {
+			_ = os.Rename(quarantine, original)
+			fatal(deleteErr)
+		}
 		deleted, _ := result.RowsAffected()
-		if deleted == 0 { _ = os.Rename(quarantine, original); continue }
+		if deleted == 0 {
+			_ = os.Rename(quarantine, original)
+			continue
+		}
 		fatal(os.RemoveAll(quarantine))
 	}
 	fmt.Println("orphaned media purged:", len(items))

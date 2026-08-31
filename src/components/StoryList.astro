@@ -1,0 +1,10 @@
+---
+interface Props {
+  eyebrow: string;
+  title: string;
+  description?: string;
+  posts: any[];
+}
+const { eyebrow, title, description, posts } = Astro.props;
+---
+<header class="max-w-4xl border-b border-line pb-10"><p class="text-xs font-bold uppercase tracking-[.18em] text-accent">{eyebrow}</p><h1 class="mt-4 font-display text-[clamp(3rem,7vw,6.5rem)] leading-[.95] tracking-[-.055em]">{title}</h1>{description&&<p class="mt-6 max-w-2xl text-lg leading-relaxed text-muted">{description}</p>}</header><div class="mt-10 grid gap-0 border-t border-line">{posts.length?posts.map((post,index)=><article class="grid gap-4 border-b border-line py-7 md:grid-cols-[4rem_1fr_auto] md:items-start"><span class="text-xs font-bold text-accent">{String(index+1).padStart(2,'0')}</span><div><h2 class="font-display text-3xl leading-tight"><a href={`/critiques/${post.slug}/`}>{post.title}</a></h2><p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted">{post.excerpt}</p></div><time class="text-xs text-muted">{post.publishedAt&&new Date(post.publishedAt).toLocaleDateString('en-RW',{dateStyle:'medium',timeZone:'Africa/Kigali'})}</time></article>):<p class="border-b border-line py-14 text-muted">No published critiques in this space yet.</p>}</div>

@@ -3,6 +3,17 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 
+const EditorialImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      placement: { default: 'center' },
+      caption: { default: '' },
+      credit: { default: '' },
+    };
+  },
+});
+
 type Me = {
   identityId: string;
   kind: string;
@@ -11,6 +22,8 @@ type Me = {
   status: string;
   displayName?: string;
   handle?: string;
+  bio?: string;
+  avatar?: string | null;
 };
 type Tab =
   | 'overview'
@@ -710,7 +723,7 @@ function Editor({ me }: { me: Me }) {
     [],
   );
   const editor = useEditor({
-    extensions: [StarterKit, Image.configure({ allowBase64: false })],
+    extensions: [StarterKit, EditorialImage.configure({ allowBase64: false })],
     content: '<p>Begin with the evidence. Explain the friction and propose a practical fix.</p>',
     immediatelyRender: false,
     onUpdate: () => setState(navigator.onLine ? 'Waiting to save' : 'Offline'),
@@ -804,7 +817,7 @@ function Editor({ me }: { me: Me }) {
         body: JSON.stringify({ placement }),
       });
       if (placement !== 'thumbnail')
-        editor?.chain().focus().setImage({ src: asset.src, alt, title: caption }).run();
+        editor?.chain().focus().setImage({ src: asset.src, alt, title: caption, placement, caption, credit } as any).run();
       setState('Waiting to save');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Image upload failed');
@@ -1356,7 +1369,9 @@ function MediaPanel() {
 function Profile({ me }: { me: Me }) {
   const [name, setName] = useState(me.displayName ?? '');
   const [handle, setHandle] = useState(me.handle ?? '');
-  const [bio, setBio] = useState('');
+  const [bio, setBio] = useState(me.bio ?? '');
+  const [avatarAssetId, setAvatarAssetId] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState(me.avatar ?? '');
   const [message, setMessage] = useState('');
   const save = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1364,7 +1379,7 @@ function Profile({ me }: { me: Me }) {
     try {
       await call('/api/v1/account/profile', {
         method: 'PATCH',
-        body: JSON.stringify({ displayName: name, handle, bio }),
+        body: JSON.stringify({ displayName: name, handle, bio, avatarAssetId }),
       });
       setMessage('Profile saved. Previous handles continue to redirect.');
     } catch (e) {
@@ -1375,6 +1390,7 @@ function Profile({ me }: { me: Me }) {
     <>
       <Heading eyebrow="Account" title="Profile settings" />
       <form onSubmit={save} className="mt-8 max-w-2xl border border-line bg-white p-8">
+        <label className="mb-6 flex cursor-pointer items-center gap-4 border border-line p-4 text-sm font-semibold">{avatarPreview ? <img src={avatarPreview} alt="Current profile" className="size-16 rounded-full object-cover"/> : <span className="grid size-16 place-items-center rounded-full bg-paper">Photo</span>}<span>Upload profile image<input type="file" accept="image/jpeg,image/png" className="sr-only" onChange={async (event) => { const file=event.target.files?.[0]; if(!file)return; const form=new FormData(); form.set('file',file); form.set('alt',`${name} profile image`); const asset=await call<any>('/api/v1/media',{method:'POST',body:form}); setAvatarAssetId(asset.id); setAvatarPreview(asset.src); setMessage('Image ready. Save the profile to use it.'); }}/></span></label>
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="text-sm font-semibold">
             Display name

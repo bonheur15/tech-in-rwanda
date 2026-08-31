@@ -166,6 +166,7 @@ func (a *API) withMutation(next handler) http.HandlerFunc {
 				return
 			}
 			recorder := &captureResponse{header: make(http.Header), status: 200}
+			recorder.header.Set("X-Request-ID", w.Header().Get("X-Request-ID"))
 			next(recorder, r, actor)
 			for name, values := range recorder.header {
 				w.Header()[name] = values
@@ -236,8 +237,13 @@ func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.Auth.RequestOTP(r.Context(), kind, in.Email, auth.ClientIP(r), in.TurnstileToken)
+	if errors.Is(err, auth.ErrDelivery) && kind == "reader" {
+		a.Logger.Error("reader OTP delivery failed", "error", err)
+		httpx.Failure(w, r, 503, "delivery_unavailable", "The sign-in email could not be sent. Please try again.")
+		return
+	}
 	if err != nil && kind == "reader" {
-		httpx.Failure(w, r, 429, "request_rejected", err.Error())
+		httpx.Failure(w, r, 429, "request_rejected", "The request was not accepted. Check the challenge or wait before trying again.")
 		return
 	}
 	if err != nil {

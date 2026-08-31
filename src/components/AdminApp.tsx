@@ -661,9 +661,13 @@ function DataPanel({
                           const status = e.target.value;
                           const reason =
                             status === 'active' ? '' : (prompt('Moderation reason') ?? '');
+                          const durationDays =
+                            status === 'suspended'
+                              ? Number(prompt('Suspend for how many days?', '7') ?? '7')
+                              : 0;
                           await call(`/api/v1/admin/readers/${row.id}`, {
                             method: 'PATCH',
-                            body: JSON.stringify({ status, reason }),
+                            body: JSON.stringify({ status, reason, durationDays }),
                           });
                           load();
                         }}
@@ -944,6 +948,23 @@ function Editor({ me }: { me: Me }) {
                   ))}
                 </select>
               </label>
+              {me.role === 'superadmin' && (
+                <button
+                  onClick={async () => {
+                    const name = prompt('New category name');
+                    if (!name) return;
+                    const description = prompt('Short category description') ?? '';
+                    await call('/api/v1/categories', {
+                      method: 'POST',
+                      body: JSON.stringify({ name, description }),
+                    });
+                    setCategories(await call<any[]>('/api/v1/categories'));
+                  }}
+                  className="mt-2 text-xs font-semibold text-accent"
+                >
+                  Add category
+                </button>
+              )}
               <fieldset className="mt-4">
                 <legend className="text-xs font-semibold">Tags</legend>
                 <div className="mt-2 grid gap-2">
@@ -964,6 +985,19 @@ function Editor({ me }: { me: Me }) {
                   ))}
                 </div>
               </fieldset>
+              {me.role === 'superadmin' && (
+                <button
+                  onClick={async () => {
+                    const name = prompt('New tag name');
+                    if (!name) return;
+                    await call('/api/v1/tags', { method: 'POST', body: JSON.stringify({ name }) });
+                    setTags(await call<any[]>('/api/v1/tags'));
+                  }}
+                  className="mt-2 text-xs font-semibold text-accent"
+                >
+                  Add tag
+                </button>
+              )}
               <button
                 onClick={() =>
                   call(`/api/v1/posts/${id}/metadata`, {
@@ -1091,7 +1125,7 @@ function PeoplePanel() {
           role: patch.role ?? row.role,
           publishMode: patch.publishMode ?? row.publishMode,
           status: patch.status ?? row.status,
-          reassignTo: '',
+          reassignTo: patch.reassignTo ?? '',
         }),
       });
       load();
@@ -1170,11 +1204,26 @@ function PeoplePanel() {
               <option value="direct_publish">Direct publish</option>
             </select>
             <button
-              onClick={() =>
-                change(row, {
-                  status: row.status === 'active' ? 'inactive' : 'active',
-                })
-              }
+              onClick={() => {
+                const status = row.status === 'active' ? 'inactive' : 'active';
+                let reassignTo = '';
+                if (
+                  status === 'inactive' &&
+                  confirm(
+                    'Reassign this author’s unpublished drafts to another active staff member?',
+                  )
+                )
+                  reassignTo =
+                    prompt(
+                      `Enter the destination identity ID:\n${rows
+                        .filter(
+                          (candidate) => candidate.id !== row.id && candidate.status === 'active',
+                        )
+                        .map((candidate) => `${candidate.displayName}: ${candidate.id}`)
+                        .join('\n')}`,
+                    ) ?? '';
+                change(row, { status, reassignTo });
+              }}
               className={`px-4 py-2 text-sm font-semibold ${row.status === 'active' ? 'border border-accent text-accent' : 'bg-[#207044] text-white'}`}
             >
               {row.status === 'active' ? 'Deactivate' : 'Reactivate'}

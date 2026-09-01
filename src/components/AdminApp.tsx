@@ -2,6 +2,7 @@ import Image from '@tiptap/extension-image';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useModalDialog } from './ModalDialog';
 
 const EditorialImage = Image.extend({
   addAttributes() {
@@ -449,6 +450,7 @@ function DataPanel({
   path: string;
   go: (v: Tab) => void;
 }) {
+  const modal = useModalDialog();
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
   const load = useCallback(() => {
@@ -559,10 +561,25 @@ function DataPanel({
                         </button>
                         <button
                           onClick={async () => {
-                            const reason = prompt('Short rejection reason') ?? '';
+                            const result = await modal.open({
+                              title: 'Reject this review?',
+                              description:
+                                'Give the author a concise reason so they know what to revise.',
+                              confirmLabel: 'Reject review',
+                              danger: true,
+                              fields: [
+                                {
+                                  name: 'reason',
+                                  label: 'Rejection reason',
+                                  type: 'textarea',
+                                  required: true,
+                                },
+                              ],
+                            });
+                            if (!result) return;
                             await call(`/api/v1/reviews/${row.id}/reject`, {
                               method: 'POST',
-                              body: JSON.stringify({ reason }),
+                              body: JSON.stringify({ reason: result.reason }),
                             });
                             load();
                           }}
@@ -652,12 +669,44 @@ function DataPanel({
                         value={row.status}
                         onChange={async (e) => {
                           const status = e.target.value;
-                          const reason =
-                            status === 'active' ? '' : (prompt('Moderation reason') ?? '');
+                          const result =
+                            status === 'active'
+                              ? {}
+                              : await modal.open({
+                                  title:
+                                    status === 'suspended'
+                                      ? 'Suspend this reader?'
+                                      : 'Ban this reader?',
+                                  description:
+                                    'Record a clear moderation reason for the audit log.',
+                                  confirmLabel:
+                                    status === 'suspended' ? 'Suspend reader' : 'Ban reader',
+                                  danger: true,
+                                  fields: [
+                                    {
+                                      name: 'reason',
+                                      label: 'Moderation reason',
+                                      type: 'textarea',
+                                      required: true,
+                                    },
+                                    ...(status === 'suspended'
+                                      ? [
+                                          {
+                                            name: 'durationDays',
+                                            label: 'Duration in days',
+                                            type: 'number' as const,
+                                            value: '7',
+                                            min: 1,
+                                            required: true,
+                                          },
+                                        ]
+                                      : []),
+                                  ],
+                                });
+                          if (!result) return load();
+                          const reason = result.reason ?? '';
                           const durationDays =
-                            status === 'suspended'
-                              ? Number(prompt('Suspend for how many days?', '7') ?? '7')
-                              : 0;
+                            status === 'suspended' ? Number(result.durationDays) : 0;
                           await call(`/api/v1/admin/readers/${row.id}`, {
                             method: 'PATCH',
                             body: JSON.stringify({ status, reason, durationDays }),
@@ -678,6 +727,7 @@ function DataPanel({
           </table>
         </div>
       )}
+      {modal.dialog}
     </>
   );
 }
@@ -691,6 +741,7 @@ function ArticlesPanel({
   go: (v: Tab) => void;
   reload: () => void;
 }) {
+  const modal = useModalDialog();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [menu, setMenu] = useState('');
@@ -709,18 +760,26 @@ function ArticlesPanel({
     window.history.replaceState({}, '', `/admin/articles/${id}/edit`);
   };
   const remove = async (row: any) => {
-    const typed = prompt(`Type the exact title to permanently delete this article:\n${row.title}`);
-    if (
-      typed !== row.title ||
-      !confirm(
-        'This permanently deletes the article, versions, comments, bookmarks, and references. Continue?',
-      )
-    )
-      return;
+    const result = await modal.open({
+      title: 'Permanently delete article?',
+      description:
+        'This deletes the article, versions, comments, bookmarks, and references. This action cannot be undone.',
+      confirmLabel: 'Delete permanently',
+      danger: true,
+      fields: [
+        {
+          name: 'title',
+          label: 'Type the exact article title to confirm',
+          required: true,
+          hint: row.title,
+        },
+      ],
+    });
+    if (!result || result.title !== row.title) return;
     await call(`/api/v1/posts/${row.id}`, {
       method: 'DELETE',
       body: JSON.stringify({
-        title: typed,
+        title: result.title,
         confirmation: 'permanently delete',
         reason: 'Deleted from editorial workspace',
       }),
@@ -854,6 +913,7 @@ function ArticlesPanel({
           ))}
         </div>
       )}
+      {modal.dialog}
     </>
   );
 }
@@ -867,6 +927,7 @@ function Editor({
   zenMode: boolean;
   setZenMode: (value: boolean) => void;
 }) {
+  const modal = useModalDialog();
   const [id, setId] = useState('');
   const [title, setTitle] = useState('Untitled article');
   const [excerpt, setExcerpt] = useState('');
@@ -963,16 +1024,32 @@ function Editor({
       setError('Create the draft before adding images.');
       return;
     }
-    const alt = prompt('Alternative text describing this image');
-    if (!alt) return;
-    const caption = prompt('Optional caption') ?? '';
-    const credit = prompt('Optional credit') ?? '';
-    const placement =
-      prompt('Placement: center, wide, full, left, right, or thumbnail', 'center') ?? 'center';
-    if (!['center', 'wide', 'full', 'left', 'right', 'thumbnail'].includes(placement)) {
-      setError('Choose a valid image placement.');
-      return;
-    }
+    const details = await modal.open({
+      title: 'Add image details',
+      description: 'Accessible descriptions help every reader understand the image.',
+      confirmLabel: 'Upload image',
+      fields: [
+        { name: 'alt', label: 'Alternative text', required: true },
+        { name: 'caption', label: 'Caption (optional)' },
+        { name: 'credit', label: 'Credit (optional)' },
+        {
+          name: 'placement',
+          label: 'Placement',
+          type: 'select',
+          value: 'center',
+          options: [
+            { label: 'Centered', value: 'center' },
+            { label: 'Wide', value: 'wide' },
+            { label: 'Full width', value: 'full' },
+            { label: 'Float left', value: 'left' },
+            { label: 'Float right', value: 'right' },
+            { label: 'Thumbnail', value: 'thumbnail' },
+          ],
+        },
+      ],
+    });
+    if (!details) return;
+    const { alt, caption, credit, placement } = details;
     const form = new FormData();
     form.set('file', file);
     form.set('alt', alt);
@@ -1303,12 +1380,13 @@ function Editor({
                         </label>
                         <button
                           onClick={async () => {
-                            if (
-                              !confirm(
-                                `Restore version ${v.number}? A new checkpoint will preserve this restore.`,
-                              )
-                            )
-                              return;
+                            const approved = await modal.open({
+                              title: `Restore version ${v.number}?`,
+                              description:
+                                'The current work will remain available as a checkpoint.',
+                              confirmLabel: 'Restore version',
+                            });
+                            if (!approved) return;
                             const p = await call<any>(`/api/v1/posts/${id}/restore/${v.id}`, {
                               method: 'POST',
                               body: '{}',
@@ -1382,6 +1460,7 @@ function Editor({
           </div>
         </div>
       )}
+      {modal.dialog}
     </>
   );
 }
@@ -1688,6 +1767,7 @@ function TaxonomyPanel({
 }
 
 function PeoplePanel() {
+  const modal = useModalDialog();
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [email, setEmail] = useState('');
@@ -1811,24 +1891,38 @@ function PeoplePanel() {
               <option value="direct_publish">Direct publish</option>
             </select>
             <button
-              onClick={() => {
+              onClick={async () => {
                 const status = row.status === 'active' ? 'inactive' : 'active';
                 let reassignTo = '';
-                if (
-                  status === 'inactive' &&
-                  confirm(
-                    'Reassign this author’s unpublished drafts to another active staff member?',
-                  )
-                )
-                  reassignTo =
-                    prompt(
-                      `Enter the destination identity ID:\n${rows
-                        .filter(
-                          (candidate) => candidate.id !== row.id && candidate.status === 'active',
-                        )
-                        .map((candidate) => `${candidate.displayName}: ${candidate.id}`)
-                        .join('\n')}`,
-                    ) ?? '';
+                if (status === 'inactive') {
+                  const candidates = rows.filter(
+                    (candidate) => candidate.id !== row.id && candidate.status === 'active',
+                  );
+                  const result = await modal.open({
+                    title: 'Deactivate this author?',
+                    description:
+                      'You may reassign their unpublished drafts now, or leave the selection unchanged.',
+                    confirmLabel: 'Deactivate author',
+                    danger: true,
+                    fields: [
+                      {
+                        name: 'reassignTo',
+                        label: 'Reassign drafts to (optional)',
+                        type: 'select',
+                        value: '',
+                        options: [
+                          { label: 'Do not reassign', value: '' },
+                          ...candidates.map((candidate) => ({
+                            label: candidate.displayName,
+                            value: candidate.id,
+                          })),
+                        ],
+                      },
+                    ],
+                  });
+                  if (!result) return;
+                  reassignTo = result.reassignTo;
+                }
                 change(row, { status, reassignTo });
               }}
               className={`px-4 py-2 text-sm font-semibold ${row.status === 'active' ? 'border border-accent text-accent' : 'bg-[#207044] text-white'}`}
@@ -1838,6 +1932,7 @@ function PeoplePanel() {
           </article>
         ))}
       </div>
+      {modal.dialog}
     </>
   );
 }

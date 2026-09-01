@@ -7,7 +7,7 @@ IMAGE ?= rwanda-free-space:local
 
 .DEFAULT_GOAL := help
 
-.PHONY: help dev generate generate-check format format-check test test-go test-web vet check build web-build api-build cli migrate-status bootstrap-superadmin recover-account backup verify-backup media-check media-cleanup smoke docker-smoke docker-build docker-run clean
+.PHONY: help dev generate generate-check format format-check test test-go test-web vet check build web-build api-build cli migrate-status bootstrap-superadmin seed-demo recover-account backup verify-backup media-check media-cleanup smoke docker-smoke docker-build docker-run clean
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; printf "Rwanda Free Space commands\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -65,6 +65,9 @@ migrate-status: ## Show applied database migrations
 
 bootstrap-superadmin: ## Bootstrap idempotently: make bootstrap-superadmin EMAIL=x HANDLE=x NAME=x
 	@$(GO) run ./backend/cmd/blogctl bootstrap-superadmin "$(EMAIL)" "$(HANDLE)" "$(NAME)"
+
+seed-demo: ## Seed a realistic, idempotent local newsroom dataset
+	@$(GO) run ./backend/cmd/blogctl seed-demo
 
 recover-account: ## Revoke every session for an account: make recover-account EMAIL=x
 	@$(GO) run ./backend/cmd/blogctl recover-account "$(EMAIL)"

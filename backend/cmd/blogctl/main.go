@@ -37,6 +37,8 @@ func main() {
 			fatal(fmt.Errorf("usage: blogctl bootstrap-superadmin EMAIL HANDLE DISPLAY_NAME"))
 		}
 		bootstrap(db, os.Args[2], os.Args[3], os.Args[4])
+	case "seed-demo":
+		seedDemo(db)
 	case "recover-account":
 		if len(os.Args) != 3 {
 			fatal(fmt.Errorf("usage: blogctl recover-account EMAIL"))
@@ -61,7 +63,7 @@ func main() {
 	}
 }
 func usage() {
-	fmt.Fprintln(os.Stderr, "blogctl: migrate-status | bootstrap-superadmin EMAIL HANDLE DISPLAY_NAME | recover-account EMAIL | backup FILE | verify-backup FILE | media-check | media-cleanup")
+	fmt.Fprintln(os.Stderr, "blogctl: migrate-status | bootstrap-superadmin EMAIL HANDLE DISPLAY_NAME | seed-demo | recover-account EMAIL | backup FILE | verify-backup FILE | media-check | media-cleanup")
 	os.Exit(2)
 }
 func fatal(err error) {

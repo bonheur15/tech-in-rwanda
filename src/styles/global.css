@@ -9,14 +9,234 @@
   --color-accent: #c53a2e;
   --color-accent-dark: #9e2a21;
   --color-focus: #126a9a;
+  --color-paper: #ffffff;
   --font-display: Georgia, "Times New Roman", serif;
   --font-sans:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+html.dark {
+  --color-canvas: #101512;
+  --color-surface: #202722;
+  --color-ink: #edf1ec;
+  --color-muted: #9aa69e;
+  --color-line: #303a33;
+  --color-accent: #f06b5f;
+  --color-accent-dark: #ff8175;
+  --color-focus: #6bb7e3;
+  --color-paper: #171d19;
+}
+
 .article-body {
   font-size: 1.125rem;
   line-height: 1.85;
+}
+
+@layer components {
+  .admin-shell {
+    background:
+      radial-gradient(
+        circle at 82% -10%,
+        color-mix(in srgb, var(--color-accent) 7%, transparent),
+        transparent 32rem
+      ),
+      var(--color-canvas);
+  }
+
+  .admin-sidebar {
+    background: linear-gradient(160deg, #1d2822 0%, #101713 100%);
+    max-height: calc(100vh - 1.5rem);
+    overflow-y: auto;
+  }
+
+  .admin-card,
+  .admin-editor,
+  .admin-search,
+  .admin-menu {
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+  }
+
+  .admin-card {
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent);
+  }
+
+  .admin-editor {
+    background: var(--color-paper);
+    box-shadow: 0 1rem 3rem color-mix(in srgb, var(--color-ink) 7%, transparent);
+  }
+
+  .admin-toolbar {
+    background: color-mix(in srgb, var(--color-paper) 94%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  .admin-primary,
+  .admin-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.7rem;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      background 0.15s ease;
+  }
+
+  .admin-primary {
+    background: var(--color-accent);
+    color: white;
+    box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+
+  .admin-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.5rem 1.2rem color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+  .admin-secondary {
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .admin-secondary:hover {
+    background: var(--color-surface);
+  }
+
+  .admin-segment {
+    border: 1px solid var(--color-line);
+    background: var(--color-surface);
+  }
+  .admin-segment-active {
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .admin-input {
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    outline: none;
+  }
+  .admin-input:focus {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 15%, transparent);
+  }
+
+  .admin-icon-button,
+  .admin-tool {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.55rem;
+    color: var(--color-muted);
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
+  }
+  .admin-icon-button:hover,
+  .admin-tool:hover,
+  .admin-tool-active {
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+  .admin-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.55rem;
+    padding: 0.55rem 0.6rem;
+    font-size: 0.75rem;
+    text-align: left;
+  }
+  .admin-menu-item:hover {
+    background: var(--color-surface);
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .status-draft {
+    background: color-mix(in srgb, #d79625 14%, transparent);
+    color: #a56a08;
+  }
+  .status-in_review,
+  .status-submitted {
+    background: color-mix(in srgb, #497aca 14%, transparent);
+    color: #3665b0;
+  }
+  .status-published {
+    background: color-mix(in srgb, #29945b 14%, transparent);
+    color: #207748;
+  }
+  .status-rejected {
+    background: color-mix(in srgb, #d33e36 14%, transparent);
+    color: #b32d27;
+  }
+
+  .article-body .tiptap p.is-editor-empty:first-child::before {
+    color: var(--color-muted);
+    content: "Start writing your article…";
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+  .article-body ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+  }
+  .article-body ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+  .article-body pre {
+    overflow-x: auto;
+    border-radius: 0.75rem;
+    background: #111815;
+    padding: 1rem;
+    color: #dce7df;
+    font-size: 0.85rem;
+  }
+  .article-body hr {
+    margin: 2.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--color-line);
+  }
+}
+
+html.dark body .bg-white {
+  background-color: var(--color-paper);
+}
+html.dark body .bg-\[\#ebe9e2\] {
+  background-color: var(--color-canvas);
+}
+html.dark body input,
+html.dark body textarea,
+html.dark body select {
+  color: var(--color-ink);
+  background-color: var(--color-paper);
+}
+html.dark body .text-\[\#687169\] {
+  color: var(--color-muted);
+}
+html.dark body .border-\[\#c9c6bc\] {
+  border-color: var(--color-line);
+}
+
+@media (max-width: 1023px) {
+  .admin-sidebar {
+    max-height: none;
+  }
 }
 .article-body > * + * {
   margin-top: 1.6em;

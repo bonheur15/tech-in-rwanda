@@ -49,6 +49,15 @@ html.dark {
     overflow-y: auto;
   }
 
+  .sidebar-create-action {
+    background: #f1f5f1;
+    color: #132019;
+  }
+
+  .sidebar-create-action:hover {
+    background: #ffffff;
+  }
+
   .admin-card,
   .admin-editor,
   .admin-search,
@@ -72,7 +81,8 @@ html.dark {
   }
 
   .admin-primary,
-  .admin-secondary {
+  .admin-secondary,
+  .admin-neutral-action {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
@@ -103,6 +113,20 @@ html.dark {
   }
   .admin-secondary:hover {
     background: var(--color-surface);
+  }
+
+  .admin-neutral-action {
+    background: #17221d;
+    color: #ffffff;
+  }
+
+  .admin-neutral-action:hover {
+    background: #26352d;
+  }
+
+  .admin-table-head {
+    background: #e2dfd6;
+    color: #65716a;
   }
 
   .admin-segment {
@@ -338,6 +362,29 @@ html.dark body .text-\[\#687169\] {
 }
 html.dark body .border-\[\#c9c6bc\] {
   border-color: var(--color-line);
+}
+
+html.dark .admin-neutral-action {
+  background: #dfe7e1;
+  color: #111914;
+}
+
+html.dark .admin-neutral-action:hover {
+  background: #f1f5f2;
+}
+
+html.dark .admin-table-head {
+  background: #242d27;
+  color: #aab7af;
+}
+
+html.dark .admin-table-head th {
+  border-bottom: 1px solid #354139;
+}
+
+html.dark .admin-card table tbody,
+html.dark table tbody {
+  color: #dbe3dd;
 }
 
 @media (max-width: 1023px) {

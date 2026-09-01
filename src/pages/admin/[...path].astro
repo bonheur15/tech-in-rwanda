@@ -1,0 +1,38 @@
+---
+import AdminApp from '../../components/AdminApp';
+import '../../styles/global.css';
+
+const labels: Record<string, string> = {
+  articles: 'Articles',
+  write: 'Write',
+  reviews: 'Reviews',
+  library: 'Fork library',
+  media: 'Media',
+  comments: 'Comments',
+  reports: 'Reports',
+  people: 'Authors',
+  readers: 'Readers',
+  sessions: 'Sessions',
+  audit: 'Audit log',
+  profile: 'Profile',
+};
+const segment = Astro.params.path?.split('/')[0] ?? 'articles';
+const title = labels[segment] ?? 'Articles';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#111815" />
+    <link rel="icon" href="/favicon.svg" />
+    <title>{title} | Rwanda Free Space</title>
+    <script is:inline>
+      try {
+        document.documentElement.classList.toggle('dark', localStorage.getItem('rfs-admin-theme') !== 'light');
+      } catch {}
+    </script>
+  </head>
+  <body><AdminApp client:load /></body>
+</html>

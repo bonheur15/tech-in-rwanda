@@ -13,6 +13,14 @@ make bootstrap-superadmin EMAIL=editor@example.com HANDLE=editor NAME="First Edi
 make dev
 ```
 
+To populate a local database with realistic demo content for the publication and newsroom:
+
+```sh
+make seed-demo
+```
+
+The seed is idempotent and adds 20 critiques, 12 readers, comments in multiple moderation states, bookmarks, taxonomy, review items, reports, suspension history, and audit events. Demo reader emails use the `rwandafreespace.test` domain.
+
 Open `http://127.0.0.1:4321/` for the publication. Staff enter the private newsroom directly at `/admin`; it is intentionally absent from public navigation. Development OTP codes are printed only by the Go terminal mailer. The terminal sender is rejected when `APP_ENV=production`.
 
 The newsroom includes drafts with two-second last-save-wins autosave, manual checkpoints, side-by-side version inspection, restore, immediate or approval publishing, forking, taxonomy, thumbnails and positioned inline media, review and comment moderation queues, reader moderation, author access modes, sessions, audit history, and profile settings. Reader accounts at `/account` provide passwordless sign-in, bookmarks, comments, privacy/avatar controls, sessions, and the two supported deletion modes.

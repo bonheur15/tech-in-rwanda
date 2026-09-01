@@ -1,7 +1,7 @@
 import Image from '@tiptap/extension-image';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const EditorialImage = Image.extend({
   addAttributes() {
@@ -85,14 +85,17 @@ async function call<T = any>(path: string, init: RequestInit = {}) {
   if (!response.ok) throw new Error(payload.error?.message ?? 'Request failed');
   return payload.data as T;
 }
-const date = (v?: string | null) =>
-  v
-    ? new Intl.DateTimeFormat('en-RW', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'Africa/Kigali',
-      }).format(new Date(v))
-    : 'Not yet';
+const date = (v?: string | null) => {
+  if (!v) return 'Not yet';
+  const value = new Date(v);
+  if (!Number.isFinite(value.getTime())) return 'Not yet';
+  return new Intl.DateTimeFormat('en-RW', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Africa/Kigali',
+  }).format(value);
+};
+const isDateField = (key: string) => /(?:At|Date)$/.test(key);
 
 export default function AdminApp() {
   const [me, setMe] = useState<Me | null>(null);
@@ -323,6 +326,10 @@ function Dashboard({
   setTheme: (v: 'light' | 'dark') => void;
   signOut: () => void;
 }) {
+  const [zenMode, setZenMode] = useState(tab === 'editor');
+  useEffect(() => {
+    setZenMode(tab === 'editor');
+  }, [tab]);
   const visible = tabs.filter(
     ([id]) =>
       id !== 'editor' &&
@@ -330,71 +337,89 @@ function Dashboard({
         !['comments', 'reports', 'people', 'readers', 'audit'].includes(id)),
   );
   return (
-    <div className="admin-shell min-h-screen lg:grid lg:grid-cols-[15.5rem_1fr]">
-      <aside className="admin-sidebar m-3 rounded-[1.4rem] p-3 text-white shadow-2xl shadow-black/20 lg:fixed lg:inset-y-0 lg:w-[15.5rem]">
-        <a href="/" className="flex items-center gap-3 px-2 py-2 text-sm font-semibold">
-          <img src="/logo.svg" className="size-8" alt="" />
-          <span>Rwanda Free Space</span>
-        </a>
-        <button
-          onClick={() => setTab('editor')}
-          className="sidebar-create-action mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <Icon name="plus" /> New article
-        </button>
-        <p className="mb-2 mt-6 px-3 text-[.65rem] font-bold uppercase tracking-[.16em] text-white/40">
-          Publishing
-        </p>
-        <nav className="grid grid-cols-2 gap-1 lg:grid-cols-1">
-          {visible.map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${tab === id ? 'bg-white/12 font-semibold text-white shadow-inner' : 'text-white/60 hover:bg-white/7 hover:text-white'}`}
-            >
-              <Icon name={id} /> {label}
-            </button>
-          ))}
-        </nav>
-        <div className="mt-6 border-t border-white/10 pt-3 lg:absolute lg:inset-x-3 lg:bottom-3">
+    <div
+      className={`admin-shell min-h-screen ${zenMode ? '' : 'lg:grid lg:grid-cols-[15.5rem_1fr]'}`}
+    >
+      {!zenMode && (
+        <aside className="admin-sidebar m-2 rounded-[1.15rem] p-2 text-white shadow-2xl shadow-black/20 sm:m-3 sm:rounded-[1.4rem] sm:p-3 lg:fixed lg:inset-y-0 lg:w-[15.5rem]">
+          <a href="/" className="flex items-center gap-3 px-2 py-2 text-sm font-semibold">
+            <img src="/logo.svg" className="size-8" alt="" />
+            <span>Rwanda Free Space</span>
+          </a>
           <button
-            onClick={() => setTab('profile')}
-            className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-white/7"
+            onClick={() => setTab('editor')}
+            className="sidebar-create-action mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:mt-5 sm:py-3"
           >
-            <span className="grid size-8 place-items-center rounded-lg bg-white/10 text-xs font-bold">
-              {me.displayName?.slice(0, 2).toUpperCase()}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-semibold">{me.displayName}</span>
-              <span className="block text-[.65rem] capitalize text-white/45">{me.role}</span>
-            </span>
+            <Icon name="plus" /> New article
           </button>
-          <div className="mt-1 grid grid-cols-2 gap-1">
+          <p className="mb-2 mt-6 hidden px-3 text-[.65rem] font-bold uppercase tracking-[.16em] text-white/40 lg:block">
+            Publishing
+          </p>
+          <nav className="mt-2 flex gap-1 overflow-x-auto pb-1 lg:mt-0 lg:grid lg:grid-cols-1 lg:overflow-visible lg:pb-0">
+            {visible.map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs transition lg:gap-3 lg:py-2.5 lg:text-sm ${tab === id ? 'bg-white/12 font-semibold text-white shadow-inner' : 'text-white/60 hover:bg-white/7 hover:text-white'}`}
+              >
+                <Icon name={id} /> {label}
+              </button>
+            ))}
+          </nav>
+          <div className="mt-2 hidden border-t border-white/10 pt-3 sm:block lg:absolute lg:inset-x-3 lg:bottom-3 lg:mt-6">
             <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="rounded-lg px-2 py-2 text-left text-xs text-white/55 hover:bg-white/7 hover:text-white"
+              onClick={() => setTab('profile')}
+              className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-white/7"
             >
-              <Icon name={theme === 'dark' ? 'sun' : 'moon'} />{' '}
-              <span className="ml-1">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+              <span className="grid size-8 place-items-center rounded-lg bg-white/10 text-xs font-bold">
+                {me.displayName?.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold">{me.displayName}</span>
+                <span className="block text-[.65rem] capitalize text-white/45">{me.role}</span>
+              </span>
             </button>
-            <button
-              onClick={signOut}
-              className="rounded-lg px-2 py-2 text-left text-xs text-white/55 hover:bg-white/7 hover:text-white"
-            >
-              <Icon name="logout" /> <span className="ml-1">Sign out</span>
-            </button>
+            <div className="mt-1 grid grid-cols-2 gap-1">
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="rounded-lg px-2 py-2 text-left text-xs text-white/55 hover:bg-white/7 hover:text-white"
+              >
+                <Icon name={theme === 'dark' ? 'sun' : 'moon'} />{' '}
+                <span className="ml-1">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+              </button>
+              <button
+                onClick={signOut}
+                className="rounded-lg px-2 py-2 text-left text-xs text-white/55 hover:bg-white/7 hover:text-white"
+              >
+                <Icon name="logout" /> <span className="ml-1">Sign out</span>
+              </button>
+            </div>
           </div>
-        </div>
-      </aside>
-      <main className="min-w-0 px-[clamp(1rem,3vw,2.5rem)] py-6 lg:col-start-2">
-        <Panel me={me} tab={tab} go={setTab} />
+        </aside>
+      )}
+      <main
+        className={`min-w-0 px-[clamp(.75rem,3vw,2.5rem)] py-4 sm:py-6 ${zenMode ? '' : 'lg:col-start-2'}`}
+      >
+        <Panel me={me} tab={tab} go={setTab} zenMode={zenMode} setZenMode={setZenMode} />
       </main>
     </div>
   );
 }
 
-function Panel({ me, tab, go }: { me: Me; tab: Tab; go: (v: Tab) => void }) {
-  if (tab === 'editor') return <Editor me={me} />;
+function Panel({
+  me,
+  tab,
+  go,
+  zenMode,
+  setZenMode,
+}: {
+  me: Me;
+  tab: Tab;
+  go: (v: Tab) => void;
+  zenMode: boolean;
+  setZenMode: (value: boolean) => void;
+}) {
+  if (tab === 'editor') return <Editor me={me} zenMode={zenMode} setZenMode={setZenMode} />;
   if (tab === 'people') return <PeoplePanel />;
   if (tab === 'media') return <MediaPanel />;
   const paths: Record<Exclude<Tab, 'editor' | 'profile'>, string> = {
@@ -483,7 +508,7 @@ function DataPanel({
                     .slice(0, 6)
                     .map((k) => (
                       <td className="max-w-xs truncate px-4 py-3" key={k}>
-                        {k.toLowerCase().includes('at')
+                        {isDateField(k)
                           ? date(row[k])
                           : typeof row[k] === 'boolean'
                             ? row[k]
@@ -833,7 +858,15 @@ function ArticlesPanel({
   );
 }
 
-function Editor({ me }: { me: Me }) {
+function Editor({
+  me,
+  zenMode,
+  setZenMode,
+}: {
+  me: Me;
+  zenMode: boolean;
+  setZenMode: (value: boolean) => void;
+}) {
   const [id, setId] = useState('');
   const [title, setTitle] = useState('Untitled article');
   const [excerpt, setExcerpt] = useState('');
@@ -967,31 +1000,44 @@ function Editor({ me }: { me: Me }) {
   };
   return (
     <>
-      <Heading
-        eyebrow={id ? 'Article editor' : 'Fresh draft'}
-        title={id ? 'Edit article' : 'Write something worth reading'}
-        description={
-          id
-            ? `${state} · Revision ${revision} · ${wordCount} words · ${Math.max(1, Math.ceil(wordCount / 220))} min read`
-            : 'Shape the idea, add evidence, then prepare it for publication.'
-        }
-        action={
-          <div className="admin-segment flex rounded-xl p-1">
-            <button
-              onClick={() => setMode('write')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${mode === 'write' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
-            >
-              <Icon name="edit" /> <span className="ml-1">Write</span>
-            </button>
-            <button
-              onClick={() => setMode('preview')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${mode === 'preview' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
-            >
-              <Icon name="eye" /> <span className="ml-1">Preview</span>
-            </button>
-          </div>
-        }
-      />
+      {!zenMode && (
+        <Heading
+          eyebrow={id ? 'Article editor' : 'Fresh draft'}
+          title={id ? 'Edit article' : 'Write something worth reading'}
+          description={
+            id
+              ? `${state} · Revision ${revision} · ${wordCount} words · ${Math.max(1, Math.ceil(wordCount / 220))} min read`
+              : 'Shape the idea, add evidence, then prepare it for publication.'
+          }
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setZenMode(true)}
+                aria-pressed={zenMode}
+                className="admin-secondary justify-center"
+              >
+                <Icon name="expand" />
+                Zen mode
+              </button>
+              <div className="admin-segment flex rounded-xl p-1">
+                <button
+                  onClick={() => setMode('write')}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${mode === 'write' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
+                >
+                  <Icon name="edit" /> <span className="ml-1">Write</span>
+                </button>
+                <button
+                  onClick={() => setMode('preview')}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${mode === 'preview' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
+                >
+                  <Icon name="eye" /> <span className="ml-1">Preview</span>
+                </button>
+              </div>
+            </div>
+          }
+        />
+      )}
       {compare.length === 2 && (
         <section className="admin-card mt-6 grid gap-4 rounded-2xl p-5 md:grid-cols-2">
           {compare.map((versionId) => {
@@ -1011,9 +1057,11 @@ function Editor({ me }: { me: Me }) {
           })}
         </section>
       )}
-      <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_17rem]">
+      <div
+        className={`${zenMode ? 'mx-auto max-w-[90rem] pb-20' : 'mt-4 sm:mt-6 2xl:grid-cols-[minmax(0,1fr)_20rem]'} grid gap-4 sm:gap-5`}
+      >
         <section className="admin-editor overflow-hidden rounded-2xl">
-          <div className="px-[clamp(1.25rem,5vw,4.5rem)] pt-[clamp(1.5rem,5vw,4rem)]">
+          <div className="px-[clamp(1rem,5vw,4.5rem)] pt-[clamp(1.25rem,5vw,4rem)]">
             <input
               value={title}
               onChange={(e) => {
@@ -1022,7 +1070,7 @@ function Editor({ me }: { me: Me }) {
               }}
               aria-label="Article title"
               placeholder="Article title"
-              className="w-full border-0 bg-transparent font-display text-[clamp(2.35rem,5vw,4.5rem)] font-semibold leading-[1.02] tracking-[-.045em] outline-none placeholder:text-muted/35"
+              className="w-full border-0 bg-transparent font-display text-[clamp(2rem,5vw,4.5rem)] font-semibold leading-[1.02] tracking-[-.045em] outline-none placeholder:text-muted/35"
             />
             <textarea
               value={excerpt}
@@ -1032,7 +1080,7 @@ function Editor({ me }: { me: Me }) {
               }}
               placeholder="Write a concise summary that tells readers why this matters…"
               maxLength={240}
-              className="mt-4 min-h-16 w-full resize-none border-0 bg-transparent text-lg leading-relaxed text-muted outline-none placeholder:text-muted/45"
+              className="mt-3 min-h-16 w-full resize-none border-0 bg-transparent text-base leading-relaxed text-muted outline-none placeholder:text-muted/45 sm:mt-4 sm:text-lg"
             />
             <div className="flex justify-end text-[.65rem] text-muted">{excerpt.length}/240</div>
           </div>
@@ -1124,7 +1172,7 @@ function Editor({ me }: { me: Me }) {
               </div>
               <EditorContent
                 editor={editor}
-                className="article-body min-h-[36rem] px-[clamp(1.25rem,5vw,4.5rem)] py-10 [&_.tiptap]:min-h-[36rem] [&_.tiptap]:outline-none"
+                className="article-body min-h-[24rem] px-[clamp(1rem,5vw,4.5rem)] py-6 sm:min-h-[36rem] sm:py-10 sm:[&_.tiptap]:min-h-[36rem] [&_.tiptap]:min-h-[24rem] [&_.tiptap]:outline-none"
               />
             </>
           ) : (
@@ -1143,145 +1191,197 @@ function Editor({ me }: { me: Me }) {
             </div>
           )}
         </section>
-        <aside className="space-y-3 xl:sticky xl:top-6 xl:self-start">
-          <div className="admin-card rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted">Publication</p>
-              <span
-                className={`size-2 rounded-full ${state === 'Saved' || state.includes('Published') ? 'bg-emerald-500' : 'bg-amber-500'}`}
-              />
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-muted">
-              {me.publishMode === 'review_required'
-                ? 'This article will be sent to an editor for approval.'
-                : 'You can publish this article directly.'}
-            </p>
-            {!id ? (
-              <button onClick={create} className="admin-primary mt-4 w-full justify-center">
-                <Icon name="save" /> Save draft
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() =>
-                    call(`/api/v1/posts/${id}/checkpoint`, {
-                      method: 'POST',
-                      body: JSON.stringify({ reason: 'manual checkpoint' }),
-                    }).then(() => {
-                      setState('Checkpoint created');
-                      loadVersions(id);
-                    })
-                  }
-                  className="admin-secondary mt-4 w-full justify-center"
-                >
-                  <Icon name="checkpoint" /> Checkpoint
-                </button>
-                <button
-                  onClick={() =>
-                    call(
-                      `/api/v1/posts/${id}/${me.publishMode === 'review_required' ? 'submit' : 'publish'}`,
-                      { method: 'POST', body: '{}' },
-                    ).then(() =>
-                      setState(
-                        me.publishMode === 'review_required' ? 'Submitted for review' : 'Published',
-                      ),
-                    )
-                  }
-                  className="admin-primary mt-2 w-full justify-center"
-                >
-                  <Icon name="send" />{' '}
-                  {me.publishMode === 'review_required' ? 'Submit for review' : 'Publish now'}
-                </button>
-              </>
-            )}
-          </div>
-          {id && (
-            <TaxonomyPanel
-              postId={id}
-              canCreateCategory={me.role === 'superadmin'}
-              categories={categories}
-              setCategories={setCategories}
-              tags={tags}
-              setTags={setTags}
-              category={category}
-              setCategory={setCategory}
-              selectedTags={selectedTags}
-              setSelectedTags={setSelectedTags}
-              onSaved={setState}
-              onError={setError}
-            />
-          )}
-          <div className="admin-card rounded-2xl p-4">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted">Autosave</p>
-            <p className="mt-3 flex items-center gap-2 text-sm">
-              <span
-                className={`size-2 rounded-full ${state === 'Saved' ? 'bg-emerald-500' : state === 'Offline' ? 'bg-red-500' : 'bg-amber-500'}`}
-              />
-              {state}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              Revision {revision} · {wordCount} words
-            </p>
-          </div>
-          {id && (
+        {!zenMode && (
+          <aside className="space-y-3 2xl:sticky 2xl:top-6 2xl:self-start">
             <div className="admin-card rounded-2xl p-4">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted">
-                Version history
-              </p>
-              <div className="mt-3 grid gap-2">
-                {versions.length === 0 ? (
-                  <p className="text-xs text-muted">No checkpoints yet.</p>
-                ) : (
-                  versions.slice(0, 8).map((v) => (
-                    <div key={v.id} className="border-t border-line pt-2 text-left text-xs">
-                      <label className="mb-2 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={compare.includes(v.id)}
-                          onChange={(event) =>
-                            setCompare((current) =>
-                              event.target.checked
-                                ? [...current.filter((id) => id !== v.id), v.id].slice(-2)
-                                : current.filter((id) => id !== v.id),
-                            )
-                          }
-                        />{' '}
-                        Compare
-                      </label>
-                      <button
-                        onClick={async () => {
-                          if (
-                            !confirm(
-                              `Restore version ${v.number}? A new checkpoint will preserve this restore.`,
-                            )
-                          )
-                            return;
-                          const p = await call<any>(`/api/v1/posts/${id}/restore/${v.id}`, {
-                            method: 'POST',
-                            body: '{}',
-                          });
-                          setTitle(p.title);
-                          setExcerpt(p.excerpt);
-                          setRevision(p.revision);
-                          editor?.commands.setContent(p.content);
-                          loadVersions(id);
-                          setState('Version restored');
-                        }}
-                        className="text-left"
-                      >
-                        <strong>v{v.number}</strong> · {v.reason}
-                        <br />
-                        <span className="text-muted">{date(v.createdAt)}</span>
-                      </button>
-                    </div>
-                  ))
-                )}
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted">
+                  Publication
+                </p>
+                <span
+                  className={`size-2 rounded-full ${state === 'Saved' || state.includes('Published') ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                />
               </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted">
+                {me.publishMode === 'review_required'
+                  ? 'This article will be sent to an editor for approval.'
+                  : 'You can publish this article directly.'}
+              </p>
+              {!id ? (
+                <button onClick={create} className="admin-primary mt-4 w-full justify-center">
+                  <Icon name="save" /> Save draft
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() =>
+                      call(`/api/v1/posts/${id}/checkpoint`, {
+                        method: 'POST',
+                        body: JSON.stringify({ reason: 'manual checkpoint' }),
+                      }).then(() => {
+                        setState('Checkpoint created');
+                        loadVersions(id);
+                      })
+                    }
+                    className="admin-secondary mt-4 w-full justify-center"
+                  >
+                    <Icon name="checkpoint" /> Checkpoint
+                  </button>
+                  <button
+                    onClick={() =>
+                      call(
+                        `/api/v1/posts/${id}/${me.publishMode === 'review_required' ? 'submit' : 'publish'}`,
+                        { method: 'POST', body: '{}' },
+                      ).then(() =>
+                        setState(
+                          me.publishMode === 'review_required'
+                            ? 'Submitted for review'
+                            : 'Published',
+                        ),
+                      )
+                    }
+                    className="admin-primary mt-2 w-full justify-center"
+                  >
+                    <Icon name="send" />{' '}
+                    {me.publishMode === 'review_required' ? 'Submit for review' : 'Publish now'}
+                  </button>
+                </>
+              )}
             </div>
-          )}
-          {error && <p className="border-l-2 border-accent pl-3 text-sm text-accent">{error}</p>}
-        </aside>
+            {id && (
+              <TaxonomyPanel
+                postId={id}
+                canCreateCategory={me.role === 'superadmin'}
+                categories={categories}
+                setCategories={setCategories}
+                tags={tags}
+                setTags={setTags}
+                category={category}
+                setCategory={setCategory}
+                selectedTags={selectedTags}
+                setSelectedTags={setSelectedTags}
+                onSaved={setState}
+                onError={setError}
+              />
+            )}
+            <div className="admin-card rounded-2xl p-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted">Autosave</p>
+              <p className="mt-3 flex items-center gap-2 text-sm">
+                <span
+                  className={`size-2 rounded-full ${state === 'Saved' ? 'bg-emerald-500' : state === 'Offline' ? 'bg-red-500' : 'bg-amber-500'}`}
+                />
+                {state}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Revision {revision} · {wordCount} words
+              </p>
+            </div>
+            {id && (
+              <div className="admin-card rounded-2xl p-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted">
+                  Version history
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {versions.length === 0 ? (
+                    <p className="text-xs text-muted">No checkpoints yet.</p>
+                  ) : (
+                    versions.slice(0, 8).map((v) => (
+                      <div key={v.id} className="border-t border-line pt-2 text-left text-xs">
+                        <label className="mb-2 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={compare.includes(v.id)}
+                            onChange={(event) =>
+                              setCompare((current) =>
+                                event.target.checked
+                                  ? [...current.filter((id) => id !== v.id), v.id].slice(-2)
+                                  : current.filter((id) => id !== v.id),
+                              )
+                            }
+                          />{' '}
+                          Compare
+                        </label>
+                        <button
+                          onClick={async () => {
+                            if (
+                              !confirm(
+                                `Restore version ${v.number}? A new checkpoint will preserve this restore.`,
+                              )
+                            )
+                              return;
+                            const p = await call<any>(`/api/v1/posts/${id}/restore/${v.id}`, {
+                              method: 'POST',
+                              body: '{}',
+                            });
+                            setTitle(p.title);
+                            setExcerpt(p.excerpt);
+                            setRevision(p.revision);
+                            editor?.commands.setContent(p.content);
+                            loadVersions(id);
+                            setState('Version restored');
+                          }}
+                          className="text-left"
+                        >
+                          <strong>v{v.number}</strong> · {v.reason}
+                          <br />
+                          <span className="text-muted">{date(v.createdAt)}</span>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+            {error && <p className="border-l-2 border-accent pl-3 text-sm text-accent">{error}</p>}
+          </aside>
+        )}
       </div>
+      {zenMode && (
+        <div className="fixed inset-x-0 bottom-0 z-20 px-3 pb-3 sm:px-6 sm:pb-5">
+          <div className="admin-card mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-2 rounded-2xl px-3 py-2 shadow-xl sm:px-4">
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted" aria-live="polite">
+              <span
+                className={`size-2 shrink-0 rounded-full ${state === 'Saved' || state.includes('Published') ? 'bg-emerald-500' : state === 'Retrying' || state === 'Offline' ? 'bg-amber-500' : 'animate-pulse bg-amber-500'}`}
+              />
+              <strong className="font-semibold text-ink">{state}</strong>
+              <span className="hidden sm:inline">· Revision {revision}</span>
+              <span>· {wordCount} words</span>
+              <span className="hidden md:inline">
+                · {Math.max(1, Math.ceil(wordCount / 220))} min read
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="admin-segment flex rounded-xl p-1">
+                <button
+                  onClick={() => setMode('write')}
+                  aria-label="Write"
+                  title="Write"
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${mode === 'write' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
+                >
+                  <Icon name="edit" /> <span className="ml-1 hidden sm:inline">Write</span>
+                </button>
+                <button
+                  onClick={() => setMode('preview')}
+                  aria-label="Preview"
+                  title="Preview"
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${mode === 'preview' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
+                >
+                  <Icon name="eye" /> <span className="ml-1 hidden sm:inline">Preview</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setZenMode(false)}
+                className="admin-secondary justify-center whitespace-nowrap"
+              >
+                <Icon name="collapse" />
+                <span className="hidden sm:inline">Exit Zen</span>
+                <span className="sm:hidden">Exit</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -1389,21 +1489,24 @@ function TaxonomyPanel({
 
   return (
     <section className="taxonomy-panel overflow-hidden rounded-2xl">
-      <header className="flex items-start justify-between border-b border-line px-4 py-4">
-        <div className="flex items-center gap-3">
-          <span className="taxonomy-icon grid size-9 place-items-center rounded-xl">
+      <header className="border-b border-line px-4 py-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="taxonomy-icon grid size-9 shrink-0 place-items-center rounded-xl">
             <Icon name="tag" />
           </span>
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 className="text-sm font-bold">Organize article</h2>
-            <p className="mt-0.5 text-[.68rem] text-muted">Help readers discover this story</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
+              Help readers discover this story
+            </p>
           </div>
         </div>
         <span
-          className={`mt-1 flex items-center gap-1.5 text-[.65rem] ${message === 'Could not save' ? 'text-amber-600' : 'text-muted'}`}
+          className={`ml-12 mt-2 flex items-center gap-1.5 text-[.68rem] ${message === 'Could not save' ? 'text-amber-600' : 'text-muted'}`}
+          aria-live="polite"
         >
           <span
-            className={`size-1.5 rounded-full ${message === 'Saving…' ? 'animate-pulse bg-amber-500' : message === 'Saved' ? 'bg-teal-500' : 'bg-line'}`}
+            className={`size-1.5 shrink-0 rounded-full ${message === 'Saving…' ? 'animate-pulse bg-amber-500' : message === 'Saved' ? 'bg-teal-500' : 'bg-line'}`}
           />
           {message}
         </span>
@@ -1743,6 +1846,36 @@ function MediaPanel() {
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [alt, setAlt] = useState('');
+  const [caption, setCaption] = useState('');
+  const [credit, setCredit] = useState('');
+  const [focalX, setFocalX] = useState('0.5');
+  const [focalY, setFocalY] = useState('0.5');
+  const [dragging, setDragging] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [copied, setCopied] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const preview = useMemo(() => (file ? URL.createObjectURL(file) : ''), [file]);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
+  useEffect(() => {
+    if (!modal) return;
+    const close = (event: KeyboardEvent) => event.key === 'Escape' && !busy && setModal(false);
+    document.addEventListener('keydown', close);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', close);
+      document.body.style.overflow = '';
+    };
+  }, [modal, busy]);
   const load = () =>
     call<any[]>('/api/v1/admin/media')
       .then(setRows)
@@ -1752,108 +1885,243 @@ function MediaPanel() {
   }, []);
   const upload = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!file) {
+      setError('Choose an image to upload.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      const form = new FormData(e.currentTarget);
+      const form = new FormData();
+      form.set('file', file);
+      form.set('alt', alt);
+      form.set('caption', caption);
+      form.set('credit', credit);
+      form.set('focalX', focalX);
+      form.set('focalY', focalY);
       await call('/api/v1/media', { method: 'POST', body: form });
-      e.currentTarget.reset();
-      load();
+      setFile(null);
+      setAlt('');
+      setCaption('');
+      setCredit('');
+      setFocalX('0.5');
+      setFocalY('0.5');
+      if (fileInput.current) fileInput.current.value = '';
+      await load();
+      setModal(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setBusy(false);
     }
   };
+  const filtered = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          (filter === 'all' || row.status === filter) &&
+          `${row.alt} ${row.caption} ${row.credit} ${row.mimeType}`
+            .toLowerCase()
+            .includes(query.toLowerCase()),
+      ),
+    [rows, filter, query],
+  );
+  const totalBytes = rows.reduce((sum, row) => sum + Number(row.bytes || 0), 0);
+  const copy = async (value: string, id: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopied(id);
+    setTimeout(() => setCopied(''), 1800);
+  };
   return (
     <>
-      <Heading eyebrow="Library" title="Images and evidence" />
-      <form
-        onSubmit={upload}
-        className="mt-8 grid gap-4 border border-line bg-white p-6 lg:grid-cols-2"
-      >
-        <label className="text-sm font-semibold">
-          JPEG or PNG
-          <input
-            required
-            name="file"
-            type="file"
-            accept="image/jpeg,image/png"
-            className="mt-2 block w-full text-sm"
-          />
-        </label>
-        <label className="text-sm font-semibold">
-          Caption
-          <input name="caption" className="mt-2 block w-full border border-line px-3 py-2" />
-        </label>
-        <label className="text-sm font-semibold">
-          Credit
-          <input name="credit" className="mt-2 block w-full border border-line px-3 py-2" />
-        </label>
-        <label className="text-sm font-semibold">
-          Focal point X (0 to 1)
-          <input
-            name="focalX"
-            type="number"
-            min="0"
-            max="1"
-            step="0.01"
-            className="mt-2 block w-full border border-line px-3 py-2"
-          />
-        </label>
-        <label className="text-sm font-semibold">
-          Focal point Y (0 to 1)
-          <input
-            name="focalY"
-            type="number"
-            min="0"
-            max="1"
-            step="0.01"
-            className="mt-2 block w-full border border-line px-3 py-2"
-          />
-        </label>
-        <label className="text-sm font-semibold">
-          Alternative text
-          <input
-            required
-            name="alt"
-            className="mt-2 block w-full border border-line px-3 py-2"
-            placeholder="Describe what the image shows"
-          />
-        </label>
-        <button
-          disabled={busy}
-          className="admin-neutral-action self-end justify-center px-5 py-2.5 font-semibold"
-        >
-          {busy ? 'Processing…' : 'Upload image'}
-        </button>
-      </form>
-      {error && <p className="mt-4 text-accent">{error}</p>}
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {rows.map((row) => (
-          <article className="overflow-hidden border border-line bg-white" key={row.id}>
-            <div className="grid aspect-[16/9] place-items-center bg-surface">
-              {row.status === 'public' ? (
-                <img src={row.src} alt={row.alt} className="size-full object-cover" />
-              ) : (
-                <span className="text-xs uppercase tracking-widest text-muted">Draft media</span>
-              )}
-            </div>
-            <div className="p-4">
-              <p className="font-semibold">{row.alt}</p>
-              <p className="mt-2 text-xs text-muted">
-                {row.width} × {row.height} · {Math.ceil(row.bytes / 1024)} KB · {row.status}
-              </p>
+      <Heading
+        eyebrow="Media library"
+        title="Images and evidence"
+        description="Upload, describe and reuse visual evidence across your reporting."
+        action={
+          <button onClick={() => { setError(''); setModal(true); }} className="admin-primary">
+            <Icon name="plus" /> Add image
+          </button>
+        }
+      />
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="media-stat">
+          <span className="media-stat-icon">
+            <Icon name="image" />
+          </span>
+          <div>
+            <strong>{rows.length}</strong>
+            <span>Total assets</span>
+          </div>
+        </div>
+        <div className="media-stat">
+          <span className="media-stat-icon">
+            <Icon name="check" />
+          </span>
+          <div>
+            <strong>{rows.filter((row) => row.status === 'public').length}</strong>
+            <span>Published</span>
+          </div>
+        </div>
+        <div className="media-stat">
+          <span className="media-stat-icon">
+            <Icon name="storage" />
+          </span>
+          <div>
+            <strong>
+              {totalBytes > 1048576
+                ? `${(totalBytes / 1048576).toFixed(1)} MB`
+                : `${Math.ceil(totalBytes / 1024)} KB`}
+            </strong>
+            <span>Library size</span>
+          </div>
+        </div>
+      </div>
+
+      <section className="mt-8">
+        <div className="flex flex-col gap-3 border-b border-line pb-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Asset library</h2>
+            <p className="mt-1 text-xs text-muted">
+              {filtered.length} {filtered.length === 1 ? 'asset' : 'assets'} shown
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <label className="admin-search flex min-w-56 flex-1 items-center gap-2 rounded-xl px-3 py-2">
+              <Icon name="search" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search media…"
+                className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+              />
+            </label>
+            <select
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              className="media-filter rounded-xl px-3 py-2 text-xs font-semibold"
+            >
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="public">Published</option>
+              <option value="orphaned">Unused</option>
+            </select>
+            <div className="admin-segment flex rounded-xl p-1">
               <button
-                onClick={() => navigator.clipboard.writeText(row.id)}
-                className="mt-3 text-xs font-semibold text-accent"
+                onClick={() => setView('grid')}
+                className={`admin-tool ${view === 'grid' ? 'admin-tool-active' : ''}`}
+                aria-label="Grid view"
               >
-                Copy asset ID
+                <Icon name="grid" />
+              </button>
+              <button
+                onClick={() => setView('list')}
+                className={`admin-tool ${view === 'list' ? 'admin-tool-active' : ''}`}
+                aria-label="List view"
+              >
+                <Icon name="list" />
               </button>
             </div>
-          </article>
-        ))}
-      </div>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="admin-card mt-5 rounded-2xl p-12 text-center">
+            <span className="media-upload-icon mx-auto grid size-12 place-items-center rounded-2xl">
+              <Icon name="image" />
+            </span>
+            <h3 className="mt-4 font-semibold">No matching images</h3>
+            <p className="mt-1 text-sm text-muted">
+              Upload evidence or adjust your search and filters.
+            </p>
+          </div>
+        ) : (
+          <div
+            className={`mt-5 grid gap-4 ${view === 'grid' ? 'sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'grid-cols-1'}`}
+          >
+            {filtered.map((row) => (
+              <article
+                className={`media-asset group overflow-hidden rounded-2xl ${view === 'list' ? 'grid sm:grid-cols-[13rem_1fr]' : ''}`}
+                key={row.id}
+              >
+                <div
+                  className={`relative grid place-items-center overflow-hidden bg-surface ${view === 'grid' ? 'aspect-[4/3]' : 'min-h-36'}`}
+                >
+                  {row.status === 'public' ? (
+                    <img
+                      src={row.src}
+                      alt={row.alt}
+                      className="size-full object-cover transition duration-300 group-hover:scale-[1.025]"
+                    />
+                  ) : (
+                    <>
+                      <span className="media-placeholder grid size-12 place-items-center rounded-2xl">
+                        <Icon name="image" />
+                      </span>
+                      <span className="absolute bottom-3 left-3 rounded-full bg-black/65 px-2 py-1 text-[.62rem] font-bold uppercase tracking-wider text-white backdrop-blur">
+                        Private preview
+                      </span>
+                    </>
+                  )}
+                  <span className={`media-status media-status-${row.status}`}>{row.status}</span>
+                </div>
+                <div className="flex min-w-0 flex-col p-4">
+                  <h3 className="line-clamp-2 text-sm font-bold leading-snug">
+                    {row.alt || 'Untitled image'}
+                  </h3>
+                  {row.caption && (
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
+                      {row.caption}
+                    </p>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-[.68rem] text-muted">
+                    <span>
+                      {row.width} × {row.height}
+                    </span>
+                    <span>{row.mimeType?.replace('image/', '').toUpperCase()}</span>
+                    <span>
+                      {row.bytes > 1048576
+                        ? `${(row.bytes / 1048576).toFixed(1)} MB`
+                        : `${Math.ceil(row.bytes / 1024)} KB`}
+                    </span>
+                  </div>
+                  <div className="mt-auto flex items-center gap-1 border-t border-line pt-3">
+                    <button onClick={() => void copy(row.id, row.id)} className="media-card-action">
+                      {copied === row.id ? <Icon name="check" /> : <Icon name="copy" />}
+                      {copied === row.id ? 'Copied' : 'Copy ID'}
+                    </button>
+                    {row.status === 'public' && (
+                      <>
+                        <button
+                          onClick={() =>
+                            void copy(
+                              new URL(row.src, window.location.origin).href,
+                              `${row.id}-url`,
+                            )
+                          }
+                          className="media-card-action"
+                        >
+                          <Icon name={copied === `${row.id}-url` ? 'check' : 'link'} />
+                          {copied === `${row.id}-url` ? 'Copied' : 'Copy URL'}
+                        </button>
+                        <a
+                          href={row.src}
+                          target="_blank"
+                          className="admin-icon-button ml-auto"
+                          aria-label="Open image"
+                        >
+                          <Icon name="external" />
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }
@@ -1965,10 +2233,10 @@ function Heading({
   action?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-5 border-b border-line pb-5">
+    <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4 sm:gap-5 sm:pb-5">
       <div>
         <p className="text-xs font-bold uppercase tracking-[.18em] text-accent">{eyebrow}</p>
-        <h1 className="mt-2 font-display text-[clamp(2.25rem,4vw,3.5rem)] font-semibold leading-none tracking-[-.045em]">
+        <h1 className="mt-1.5 font-display text-[clamp(2rem,4vw,3.5rem)] font-semibold leading-none tracking-[-.045em] sm:mt-2">
           {title}
         </h1>
         {description && <p className="mt-2 text-sm text-muted">{description}</p>}
@@ -2101,6 +2369,18 @@ function Icon({ name }: { name: string }) {
         <circle cx="12" cy="12" r="3" />
       </>
     ),
+    expand: (
+      <>
+        <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
+        <path d="m3 8 5-5M21 8l-5-5M3 16l5 5M21 16l-5 5" />
+      </>
+    ),
+    collapse: (
+      <>
+        <path d="M8 8H3M8 8V3M16 8h5M16 8V3M8 16H3M8 16v5M16 16h5M16 16v5" />
+        <path d="m3 3 5 5M21 3l-5 5M3 21l5-5M21 21l-5-5" />
+      </>
+    ),
     undo: (
       <>
         <path d="m9 7-5 5 5 5" />
@@ -2187,6 +2467,32 @@ function Icon({ name }: { name: string }) {
     chevron: <path d="m8 10 4 4 4-4" />,
     close: <path d="m6 6 12 12M18 6 6 18" />,
     check: <path d="m5 12 4 4L19 6" />,
+    upload: (
+      <>
+        <path d="M12 16V4M7 9l5-5 5 5" />
+        <path d="M5 14v6h14v-6" />
+      </>
+    ),
+    storage: (
+      <>
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
+      </>
+    ),
+    grid: (
+      <>
+        <rect x="4" y="4" width="6" height="6" rx="1" />
+        <rect x="14" y="4" width="6" height="6" rx="1" />
+        <rect x="4" y="14" width="6" height="6" rx="1" />
+        <rect x="14" y="14" width="6" height="6" rx="1" />
+      </>
+    ),
+    link: (
+      <>
+        <path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2" />
+        <path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2" />
+      </>
+    ),
   };
   return (
     <svg

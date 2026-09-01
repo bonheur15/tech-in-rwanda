@@ -1859,6 +1859,18 @@ function MediaPanel() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [copied, setCopied] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+  const closeModal = () => {
+    if (busy) return;
+    setModal(false);
+    setFile(null);
+    setAlt('');
+    setCaption('');
+    setCredit('');
+    setFocalX('0.5');
+    setFocalY('0.5');
+    setError('');
+    if (fileInput.current) fileInput.current.value = '';
+  };
   const preview = useMemo(() => (file ? URL.createObjectURL(file) : ''), [file]);
   useEffect(
     () => () => {
@@ -1868,7 +1880,7 @@ function MediaPanel() {
   );
   useEffect(() => {
     if (!modal) return;
-    const close = (event: KeyboardEvent) => event.key === 'Escape' && !busy && setModal(false);
+    const close = (event: KeyboardEvent) => event.key === 'Escape' && closeModal();
     document.addEventListener('keydown', close);
     document.body.style.overflow = 'hidden';
     return () => {
@@ -1939,7 +1951,13 @@ function MediaPanel() {
         title="Images and evidence"
         description="Upload, describe and reuse visual evidence across your reporting."
         action={
-          <button onClick={() => { setError(''); setModal(true); }} className="admin-primary">
+          <button
+            onClick={() => {
+              setError('');
+              setModal(true);
+            }}
+            className="admin-neutral-action rounded-xl px-4 py-2.5 text-sm font-semibold"
+          >
             <Icon name="plus" /> Add image
           </button>
         }
@@ -2122,6 +2140,233 @@ function MediaPanel() {
           </div>
         )}
       </section>
+
+      {modal && (
+        <div
+          className="media-modal-backdrop fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 sm:p-8"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && closeModal()}
+        >
+          <form
+            onSubmit={upload}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="media-modal-title"
+            className="media-modal my-auto w-full max-w-4xl overflow-hidden rounded-[1.35rem]"
+          >
+            <header className="flex items-start justify-between border-b border-line px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-[.65rem] font-bold uppercase tracking-[.16em] text-muted">
+                  New library asset
+                </p>
+                <h2 id="media-modal-title" className="mt-1 font-display text-2xl font-semibold">
+                  Add an image
+                </h2>
+                <p className="mt-1 text-xs text-muted">
+                  Upload the source, then add the information editors and readers need.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={closeModal}
+                className="admin-icon-button"
+                aria-label="Close upload dialog"
+              >
+                <Icon name="close" />
+              </button>
+            </header>
+
+            <div className="grid min-h-[29rem] md:grid-cols-[.9fr_1.1fr]">
+              <section className="media-modal-preview border-b border-line p-5 md:border-b-0 md:border-r sm:p-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-xs font-bold">1. Choose source</h3>
+                  {file && (
+                    <button
+                      type="button"
+                      onClick={() => fileInput.current?.click()}
+                      className="text-xs font-semibold text-ink underline underline-offset-4"
+                    >
+                      Replace
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDragging(false);
+                    const next = event.dataTransfer.files[0];
+                    if (next?.type.match(/^image\/(jpeg|png)$/)) {
+                      setFile(next);
+                      setError('');
+                    } else setError('Use a JPEG or PNG image.');
+                  }}
+                  className={`media-dropzone relative grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-xl ${dragging ? 'media-dropzone-active' : ''}`}
+                >
+                  {preview ? (
+                    <img
+                      src={preview}
+                      alt="Upload preview"
+                      className="absolute inset-0 size-full object-cover"
+                    />
+                  ) : (
+                    <div className="relative z-[1] px-6 text-center">
+                      <span className="media-upload-icon mx-auto grid size-12 place-items-center rounded-2xl">
+                        <Icon name="upload" />
+                      </span>
+                      <strong className="mt-4 block text-sm">Drop image or browse</strong>
+                      <span className="mt-1 block text-xs text-muted">
+                        JPEG or PNG · maximum 15 MB
+                      </span>
+                    </div>
+                  )}
+                </button>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="sr-only"
+                  onChange={(event) => {
+                    setFile(event.target.files?.[0] ?? null);
+                    setError('');
+                  }}
+                />
+                {file && (
+                  <div className="media-file-summary mt-3 flex items-center gap-3 rounded-xl px-3 py-2.5">
+                    <span className="grid size-8 place-items-center rounded-lg bg-surface">
+                      <Icon name="image" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <strong className="block truncate text-xs">{file.name}</strong>
+                      <span className="text-[.65rem] text-muted">
+                        {(file.size / 1048576).toFixed(2)} MB ·{' '}
+                        {file.type.replace('image/', '').toUpperCase()}
+                      </span>
+                    </div>
+                    <Icon name="check" />
+                  </div>
+                )}
+              </section>
+
+              <section className="p-5 sm:p-6">
+                <div className="mb-4">
+                  <h3 className="text-xs font-bold">2. Describe the image</h3>
+                  <p className="mt-1 text-[.68rem] leading-relaxed text-muted">
+                    Alternative text is required for accessibility. Caption and credit appear with
+                    the image.
+                  </p>
+                </div>
+                <label className="media-field-label">
+                  Alternative text *
+                  <textarea
+                    autoFocus
+                    required
+                    maxLength={300}
+                    value={alt}
+                    onChange={(event) => setAlt(event.target.value)}
+                    placeholder="Describe what the image shows and why it matters"
+                    className="media-field min-h-24 resize-none"
+                  />
+                  <span>{alt.length}/300</span>
+                </label>
+                <label className="media-field-label mt-3">
+                  Caption
+                  <input
+                    value={caption}
+                    onChange={(event) => setCaption(event.target.value)}
+                    placeholder="Add context for readers (optional)"
+                    className="media-field"
+                  />
+                </label>
+                <label className="media-field-label mt-3">
+                  Credit or source
+                  <input
+                    value={credit}
+                    onChange={(event) => setCredit(event.target.value)}
+                    placeholder="Photographer, organization, or source URL"
+                    className="media-field"
+                  />
+                </label>
+                <details className="media-advanced mt-4 rounded-xl p-3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold">
+                    <span>Crop focal point</span>
+                    <span className="text-muted">
+                      <Icon name="chevron" />
+                    </span>
+                  </summary>
+                  <p className="mt-2 text-[.65rem] text-muted">
+                    Use values from 0 to 1. The default centers the crop.
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <label className="media-field-label">
+                      Horizontal
+                      <input
+                        value={focalX}
+                        onChange={(event) => setFocalX(event.target.value)}
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        className="media-field"
+                      />
+                    </label>
+                    <label className="media-field-label">
+                      Vertical
+                      <input
+                        value={focalY}
+                        onChange={(event) => setFocalY(event.target.value)}
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        className="media-field"
+                      />
+                    </label>
+                  </div>
+                </details>
+                {error && (
+                  <p
+                    role="alert"
+                    className="mt-3 rounded-lg border border-accent/25 bg-accent/8 px-3 py-2 text-xs text-accent"
+                  >
+                    {error}
+                  </p>
+                )}
+              </section>
+            </div>
+
+            <footer className="flex flex-col-reverse items-stretch justify-between gap-3 border-t border-line px-5 py-4 sm:flex-row sm:items-center sm:px-6">
+              <p className="text-[.68rem] text-muted">
+                The original is preserved; optimized sizes are generated automatically.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={closeModal}
+                  className="admin-secondary justify-center"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={busy || !file || !alt.trim()}
+                  className="admin-neutral-action rounded-xl px-4 py-2.5 text-xs font-semibold"
+                >
+                  <Icon name="upload" /> {busy ? 'Saving image…' : 'Save to library'}
+                </button>
+              </div>
+            </footer>
+          </form>
+        </div>
+      )}
     </>
   );
 }

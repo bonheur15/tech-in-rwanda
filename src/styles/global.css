@@ -255,6 +255,167 @@ html.dark {
     color: var(--taxonomy-color);
   }
 
+  .media-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.9rem;
+    background: var(--color-paper);
+    padding: 0.85rem 1rem;
+  }
+  .media-stat-icon,
+  .media-upload-icon,
+  .media-placeholder {
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, #267a75 11%, var(--color-paper));
+    color: #267a75;
+  }
+  .media-stat-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    border-radius: 0.7rem;
+  }
+  .media-stat strong,
+  .media-stat span:last-child {
+    display: block;
+  }
+  .media-stat strong {
+    font-size: 0.95rem;
+    line-height: 1.2;
+  }
+  .media-stat div > span {
+    margin-top: 0.15rem;
+    color: var(--color-muted);
+    font-size: 0.66rem;
+  }
+  .media-uploader,
+  .media-asset {
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent);
+  }
+  .media-dropzone {
+    border: 1.5px dashed color-mix(in srgb, #267a75 45%, var(--color-line));
+    background:
+      linear-gradient(color-mix(in srgb, #267a75 5%, transparent), transparent), var(--color-canvas);
+    color: var(--color-ink);
+    transition:
+      border-color 0.18s ease,
+      background 0.18s ease,
+      transform 0.18s ease;
+  }
+  .media-dropzone:hover,
+  .media-dropzone-active {
+    border-color: #267a75;
+    background: color-mix(in srgb, #267a75 9%, var(--color-paper));
+  }
+  .media-dropzone-active {
+    transform: scale(0.99);
+  }
+  .media-field-label {
+    position: relative;
+    display: block;
+    color: var(--color-ink);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .media-field-label > span {
+    position: absolute;
+    right: 0.65rem;
+    bottom: 0.45rem;
+    color: var(--color-muted);
+    font-size: 0.58rem;
+    font-weight: 500;
+  }
+  .media-field {
+    display: block;
+    width: 100%;
+    margin-top: 0.35rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.65rem;
+    background: var(--color-canvas);
+    padding: 0.65rem 0.75rem;
+    color: var(--color-ink);
+    font-size: 0.75rem;
+    font-weight: 450;
+    outline: none;
+  }
+  .media-field:focus {
+    border-color: #267a75;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #267a75 13%, transparent);
+  }
+  .media-upload-action {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: 0.7rem;
+    background: #267a75;
+    padding: 0.7rem 0.9rem;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 750;
+    box-shadow: 0 0.4rem 1rem color-mix(in srgb, #267a75 20%, transparent);
+  }
+  .media-upload-action:hover {
+    background: #1d6662;
+  }
+  .media-upload-action:disabled {
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.45;
+  }
+  .media-filter {
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    outline: none;
+  }
+  .media-filter:focus {
+    border-color: var(--color-focus);
+  }
+  .media-status {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    border-radius: 999px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    backdrop-filter: blur(8px);
+  }
+  .media-status-public {
+    background: color-mix(in srgb, #248655 85%, transparent);
+    color: white;
+  }
+  .media-status-draft {
+    background: color-mix(in srgb, #d08a19 85%, transparent);
+    color: white;
+  }
+  .media-status-orphaned {
+    background: color-mix(in srgb, var(--color-ink) 70%, transparent);
+    color: var(--color-paper);
+  }
+  .media-card-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 0.45rem;
+    padding: 0.4rem 0.45rem;
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+  .media-card-action:hover {
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+
   .admin-icon-button,
   .admin-tool {
     display: inline-grid;

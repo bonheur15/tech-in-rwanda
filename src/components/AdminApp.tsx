@@ -277,7 +277,7 @@ function StaffLogin({ onDone }: { onDone: () => void }) {
           )}
           <button
             disabled={busy}
-            className="mt-6 w-full bg-ink px-5 py-3.5 font-semibold text-white disabled:opacity-50"
+            className="admin-neutral-action mt-6 w-full justify-center px-5 py-3.5 font-semibold disabled:opacity-50"
           >
             {busy ? 'Please wait…' : step === 'email' ? 'Send secure code' : 'Sign in'}
           </button>
@@ -338,7 +338,7 @@ function Dashboard({
         </a>
         <button
           onClick={() => setTab('editor')}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-3 text-sm font-bold text-[#17221d] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          className="sidebar-create-action mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <Icon name="plus" /> New article
         </button>
@@ -464,7 +464,7 @@ function DataPanel({
       ) : (
         <div className="mt-8 overflow-x-auto border border-line bg-white">
           <table className="w-full min-w-[45rem] border-collapse text-left text-sm">
-            <thead className="bg-[#e2dfd6] text-xs uppercase tracking-wider text-muted">
+            <thead className="admin-table-head text-xs uppercase tracking-wider">
               <tr>
                 {Object.keys(rows[0])
                   .slice(0, 6)
@@ -1672,7 +1672,9 @@ function PeoplePanel() {
           <option value="review_required">Review required</option>
           <option value="direct_publish">Direct publish</option>
         </select>
-        <button className="bg-ink px-4 py-2.5 font-semibold text-white">Add author</button>
+        <button className="admin-neutral-action justify-center px-4 py-2.5 font-semibold">
+          Add author
+        </button>
       </form>
       {error && <p className="mt-4 text-accent">{error}</p>}
       <div className="mt-6 grid gap-4">
@@ -1819,7 +1821,10 @@ function MediaPanel() {
             placeholder="Describe what the image shows"
           />
         </label>
-        <button disabled={busy} className="self-end bg-ink px-5 py-2.5 font-semibold text-white">
+        <button
+          disabled={busy}
+          className="admin-neutral-action self-end justify-center px-5 py-2.5 font-semibold"
+        >
           {busy ? 'Processing…' : 'Upload image'}
         </button>
       </form>
@@ -1936,7 +1941,9 @@ function Profile({ me }: { me: Me }) {
           </label>
         </div>
         <div className="mt-6 flex items-center gap-4">
-          <button className="bg-ink px-5 py-2.5 font-semibold text-white">Save profile</button>
+          <button className="admin-neutral-action justify-center px-5 py-2.5 font-semibold">
+            Save profile
+          </button>
           <span className="text-sm text-muted">{message}</span>
         </div>
         <p className="mt-8 border-t border-line pt-5 text-xs capitalize text-muted">

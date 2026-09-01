@@ -1,4 +1,6 @@
-import { useEffect, useState, type SyntheticEvent } from 'react';
+import { type SyntheticEvent, useEffect, useState } from 'react';
+import { useModalDialog } from './ModalDialog';
+
 const cookie = (name: string) =>
   decodeURIComponent(
     document.cookie
@@ -22,6 +24,7 @@ async function api<T = any>(path: string, init: RequestInit = {}) {
   return b.data as T;
 }
 export default function ArticleCommunity({ postId }: { postId: string }) {
+  const modal = useModalDialog();
   const [reader, setReader] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [body, setBody] = useState('');
@@ -124,13 +127,23 @@ export default function ArticleCommunity({ postId }: { postId: string }) {
                   {!c.mine && c.status === 'approved' && (
                     <button
                       onClick={async () => {
-                        const reason = window.prompt(
-                          'Briefly explain why this comment should be reviewed.',
-                        );
-                        if (!reason) return;
+                        const result = await modal.open({
+                          title: 'Report this comment',
+                          description: 'Tell the moderation team what needs their attention.',
+                          confirmLabel: 'Send report',
+                          fields: [
+                            {
+                              name: 'reason',
+                              label: 'Reason for reporting',
+                              type: 'textarea',
+                              required: true,
+                            },
+                          ],
+                        });
+                        if (!result) return;
                         await api(`/api/v1/comments/${c.id}/reports`, {
                           method: 'POST',
-                          body: JSON.stringify({ reason }),
+                          body: JSON.stringify({ reason: result.reason }),
                         });
                         setMessage('Report sent to the moderation team.');
                       }}
@@ -189,6 +202,7 @@ export default function ArticleCommunity({ postId }: { postId: string }) {
         </p>
       )}
       {message && <p className="mt-4 text-sm text-accent">{message}</p>}
+      {modal.dialog}
     </section>
   );
 }

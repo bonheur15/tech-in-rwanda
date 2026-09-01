@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
+import { useModalDialog } from './ModalDialog';
 
 declare global {
   interface Window {
@@ -216,6 +217,7 @@ function Onboarding({ done }: { done: () => void }) {
 }
 
 function ReaderHome({ me }: { me: any }) {
+  const modal = useModalDialog();
   const [bookmarks, setBookmarks] = useState<any[]>([]),
     [sessions, setSessions] = useState<any[]>([]),
     [comments, setComments] = useState<any[]>([]),
@@ -373,7 +375,14 @@ function ReaderHome({ me }: { me: any }) {
         <button
           disabled={confirmation !== 'delete my account'}
           onClick={async () => {
-            if (!confirm('Permanently delete this reader account?')) return;
+            const approved = await modal.open({
+              title: 'Permanently delete your account?',
+              description:
+                'This cannot be undone. Your profile and account access will be permanently removed.',
+              confirmLabel: 'Delete account',
+              danger: true,
+            });
+            if (!approved) return;
             await api('/api/v1/reader/account', {
               method: 'DELETE',
               body: JSON.stringify({ mode: deletionMode, confirmation }),
@@ -395,6 +404,7 @@ function ReaderHome({ me }: { me: any }) {
       >
         Sign out
       </button>
+      {modal.dialog}
     </>
   );
 }

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
+import Image from '@tiptap/extension-image';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Image from '@tiptap/extension-image';
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 const EditorialImage = Image.extend({
   addAttributes() {
@@ -26,7 +26,6 @@ type Me = {
   avatar?: string | null;
 };
 type Tab =
-  | 'overview'
   | 'articles'
   | 'library'
   | 'editor'
@@ -40,11 +39,10 @@ type Tab =
   | 'audit'
   | 'profile';
 const tabs: [Tab, string][] = [
-  ['overview', 'Overview'],
   ['articles', 'Articles'],
-  ['library', 'Fork library'],
-  ['editor', 'Write'],
+  ['editor', 'New article'],
   ['reviews', 'Reviews'],
+  ['library', 'Fork library'],
   ['media', 'Media'],
   ['comments', 'Comments'],
   ['reports', 'Reports'],
@@ -54,6 +52,14 @@ const tabs: [Tab, string][] = [
   ['audit', 'Audit log'],
   ['profile', 'Profile'],
 ];
+const routeFor = (tab: Tab) => `/admin/${tab === 'editor' ? 'write' : tab}`;
+const tabFromPath = (path: string): Tab => {
+  if (/^\/admin\/articles\/[^/]+\/edit\/?$/.test(path)) return 'editor';
+  const segment = path.replace(/^\/admin\/?/, '').split('/')[0];
+  if (!segment) return 'articles';
+  if (segment === 'write') return 'editor';
+  return tabs.some(([id]) => id === segment) ? (segment as Tab) : 'articles';
+};
 const cookie = (name: string) =>
   decodeURIComponent(
     document.cookie
@@ -91,7 +97,14 @@ const date = (v?: string | null) =>
 export default function AdminApp() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(() =>
+    typeof window === 'undefined' ? 'articles' : tabFromPath(window.location.pathname),
+  );
+  const [theme, setTheme] = useState<'light' | 'dark'>(() =>
+    typeof window !== 'undefined' && localStorage.getItem('rfs-admin-theme') === 'light'
+      ? 'light'
+      : 'dark',
+  );
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     call<Me>('/api/v1/auth/me')
@@ -99,6 +112,22 @@ export default function AdminApp() {
       .catch(() => setMe(null))
       .finally(() => setLoading(false));
   }, [refresh]);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem('rfs-admin-theme', theme);
+  }, [theme]);
+  useEffect(() => {
+    const onPopState = () => setTab(tabFromPath(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+  const navigate = useCallback((next: Tab) => {
+    const route = routeFor(next);
+    if (window.location.pathname !== route) window.history.pushState({}, '', route);
+    setTab(next);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
   if (loading)
     return (
       <div className="grid min-h-screen place-items-center">
@@ -118,7 +147,9 @@ export default function AdminApp() {
     <Dashboard
       me={me}
       tab={tab}
-      setTab={setTab}
+      setTab={navigate}
+      theme={theme}
+      setTheme={setTheme}
       signOut={async () => {
         await call('/api/v1/auth/logout', { method: 'POST', body: '{}' });
         setMe(null);
@@ -281,47 +312,81 @@ function Dashboard({
   me,
   tab,
   setTab,
+  theme,
+  setTheme,
   signOut,
 }: {
   me: Me;
   tab: Tab;
   setTab: (v: Tab) => void;
+  theme: 'light' | 'dark';
+  setTheme: (v: 'light' | 'dark') => void;
   signOut: () => void;
 }) {
   const visible = tabs.filter(
     ([id]) =>
-      me.role === 'superadmin' ||
-      !['comments', 'reports', 'people', 'readers', 'audit'].includes(id),
+      id !== 'editor' &&
+      (me.role === 'superadmin' ||
+        !['comments', 'reports', 'people', 'readers', 'audit'].includes(id)),
   );
   return (
-    <div className="min-h-screen xl:grid xl:grid-cols-[17rem_1fr]">
-      <aside className="border-r border-[#313b35] bg-ink p-5 text-canvas xl:fixed xl:inset-y-0 xl:w-[17rem]">
-        <a href="/" className="flex items-center gap-3 font-semibold">
-          <img src="/logo.svg" className="size-9" />
-          Rwanda Free Space
+    <div className="admin-shell min-h-screen lg:grid lg:grid-cols-[15.5rem_1fr]">
+      <aside className="admin-sidebar m-3 rounded-[1.4rem] p-3 text-white shadow-2xl shadow-black/20 lg:fixed lg:inset-y-0 lg:w-[15.5rem]">
+        <a href="/" className="flex items-center gap-3 px-2 py-2 text-sm font-semibold">
+          <img src="/logo.svg" className="size-8" alt="" />
+          <span>Rwanda Free Space</span>
         </a>
-        <div className="mt-8 border-y border-[#35413a] py-5">
-          <p className="text-sm font-semibold">{me.displayName}</p>
-          <p className="mt-1 text-xs capitalize text-[#929f96]">
-            {me.role} · {me.publishMode.replace('_', ' ')}
-          </p>
-        </div>
-        <nav className="mt-5 grid grid-cols-2 gap-1 xl:grid-cols-1">
+        <button
+          onClick={() => setTab('editor')}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-3 text-sm font-bold text-[#17221d] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <Icon name="plus" /> New article
+        </button>
+        <p className="mb-2 mt-6 px-3 text-[.65rem] font-bold uppercase tracking-[.16em] text-white/40">
+          Publishing
+        </p>
+        <nav className="grid grid-cols-2 gap-1 lg:grid-cols-1">
           {visible.map(([id, label]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`rounded-sm px-3 py-2.5 text-left text-sm ${tab === id ? 'bg-[#f5f1e8] font-semibold text-ink' : 'text-[#aeb8b1] hover:bg-[#27332c]'}`}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${tab === id ? 'bg-white/12 font-semibold text-white shadow-inner' : 'text-white/60 hover:bg-white/7 hover:text-white'}`}
             >
-              {label}
+              <Icon name={id} /> {label}
             </button>
           ))}
         </nav>
-        <button onClick={signOut} className="mt-8 px-3 text-sm text-[#df6b60]">
-          Sign out
-        </button>
+        <div className="mt-6 border-t border-white/10 pt-3 lg:absolute lg:inset-x-3 lg:bottom-3">
+          <button
+            onClick={() => setTab('profile')}
+            className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-white/7"
+          >
+            <span className="grid size-8 place-items-center rounded-lg bg-white/10 text-xs font-bold">
+              {me.displayName?.slice(0, 2).toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-semibold">{me.displayName}</span>
+              <span className="block text-[.65rem] capitalize text-white/45">{me.role}</span>
+            </span>
+          </button>
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="rounded-lg px-2 py-2 text-left text-xs text-white/55 hover:bg-white/7 hover:text-white"
+            >
+              <Icon name={theme === 'dark' ? 'sun' : 'moon'} />{' '}
+              <span className="ml-1">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+            </button>
+            <button
+              onClick={signOut}
+              className="rounded-lg px-2 py-2 text-left text-xs text-white/55 hover:bg-white/7 hover:text-white"
+            >
+              <Icon name="logout" /> <span className="ml-1">Sign out</span>
+            </button>
+          </div>
+        </div>
       </aside>
-      <main className="min-w-0 p-[clamp(1rem,4vw,3.5rem)] xl:col-start-2">
+      <main className="min-w-0 px-[clamp(1rem,3vw,2.5rem)] py-6 lg:col-start-2">
         <Panel me={me} tab={tab} go={setTab} />
       </main>
     </div>
@@ -333,7 +398,6 @@ function Panel({ me, tab, go }: { me: Me; tab: Tab; go: (v: Tab) => void }) {
   if (tab === 'people') return <PeoplePanel />;
   if (tab === 'media') return <MediaPanel />;
   const paths: Record<Exclude<Tab, 'editor' | 'profile'>, string> = {
-    overview: '/api/v1/admin/overview',
     articles: '/api/v1/admin/posts',
     library: '/api/v1/public/posts?limit=100',
     reviews: '/api/v1/admin/reviews',
@@ -372,63 +436,15 @@ function DataPanel({
   const title = tabs.find((x) => x[0] === tab)?.[1];
   if (error) return <Empty title={title ?? 'Dashboard'} text={error} />;
   if (data === null) return <Empty title={title ?? 'Dashboard'} text="Loading…" />;
-  if (tab === 'overview')
-    return (
-      <>
-        <Heading
-          eyebrow="Newsroom"
-          title={`Good ${new Date().getHours() < 12 ? 'morning' : 'day'}, ${me.displayName?.split(' ')[0] ?? 'editor'}.`}
-          action={
-            <button
-              onClick={() => go('editor')}
-              className="bg-accent px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              New critique
-            </button>
-          }
-        />
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {Object.entries(data).map(([key, value]) => (
-            <div className="border border-line bg-white p-6" key={key}>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted">{key}</p>
-              <p className="mt-5 font-display text-5xl">{String(value)}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-8 grid gap-6 lg:grid-cols-2">
-          <section className="border border-line bg-white p-7">
-            <h2 className="font-display text-3xl">Editorial rhythm</h2>
-            <p className="mt-3 text-muted">
-              Draft deliberately, create checkpoints before substantial edits, and publish only the
-              exact version you reviewed.
-            </p>
-          </section>
-          <section className="border border-line bg-ink p-7 text-canvas">
-            <h2 className="font-display text-3xl">Your publishing mode</h2>
-            <p className="mt-3 text-[#aeb8b1]">
-              {me.publishMode === 'direct_publish'
-                ? 'You can publish directly. Every publication still creates an immutable version.'
-                : 'Your work must be approved by a superadmin before publication.'}
-            </p>
-          </section>
-        </div>
-      </>
-    );
   const rows = Array.isArray(data) ? data : [];
+  if (tab === 'articles') return <ArticlesPanel rows={rows} go={go} reload={load} />;
   return (
     <>
       <Heading
         eyebrow="Administration"
         title={title ?? 'Dashboard'}
         action={
-          tab === 'articles' ? (
-            <button
-              onClick={() => go('editor')}
-              className="bg-ink px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              New article
-            </button>
-          ) : tab === 'sessions' ? (
+          tab === 'sessions' ? (
             <button
               onClick={async () => {
                 await call('/api/v1/sessions', { method: 'DELETE', body: '{}' });
@@ -477,68 +493,6 @@ function DataPanel({
                       </td>
                     ))}
                   <td className="whitespace-nowrap px-4 py-3">
-                    {tab === 'articles' && (
-                      <>
-                        <button
-                          onClick={() => {
-                            sessionStorage.setItem('rfs-edit-post', row.id);
-                            go('editor');
-                          }}
-                          className="mr-3 font-semibold text-accent"
-                        >
-                          Edit
-                        </button>
-                        {row.state === 'published' && (
-                          <a
-                            href={`/critiques/${row.slug}/`}
-                            target="_blank"
-                            className="mr-3 font-semibold"
-                          >
-                            Preview
-                          </a>
-                        )}
-                        <button
-                          onClick={async () => {
-                            if (!confirm(`Create an independent fork of “${row.title}”?`)) return;
-                            const fork = await call<any>(`/api/v1/posts/${row.id}/fork`, {
-                              method: 'POST',
-                              body: '{}',
-                            });
-                            sessionStorage.setItem('rfs-edit-post', fork.id);
-                            go('editor');
-                          }}
-                          className="mr-3 font-semibold"
-                        >
-                          Fork
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const typed = prompt(
-                              `Type the exact title to permanently delete this post:\n${row.title}`,
-                            );
-                            if (
-                              typed !== row.title ||
-                              !confirm(
-                                'This permanently deletes the post, versions, comments, bookmarks, and references. Continue?',
-                              )
-                            )
-                              return;
-                            await call(`/api/v1/posts/${row.id}`, {
-                              method: 'DELETE',
-                              body: JSON.stringify({
-                                title: typed,
-                                confirmation: 'permanently delete',
-                                reason: 'Deleted from editorial workspace',
-                              }),
-                            });
-                            load();
-                          }}
-                          className="font-semibold text-red-700"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
                     {tab === 'library' && (
                       <>
                         <a
@@ -556,6 +510,7 @@ function DataPanel({
                             });
                             sessionStorage.setItem('rfs-edit-post', fork.id);
                             go('editor');
+                            window.history.replaceState({}, '', `/admin/articles/${fork.id}/edit`);
                           }}
                           className="font-semibold text-accent"
                         >
@@ -702,15 +657,193 @@ function DataPanel({
   );
 }
 
+function ArticlesPanel({
+  rows,
+  go,
+  reload,
+}: {
+  rows: any[];
+  go: (v: Tab) => void;
+  reload: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [menu, setMenu] = useState('');
+  const filtered = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          (filter === 'all' || row.state === filter) &&
+          `${row.title} ${row.excerpt} ${row.author}`.toLowerCase().includes(query.toLowerCase()),
+      ),
+    [rows, query, filter],
+  );
+  const open = (id: string) => {
+    sessionStorage.setItem('rfs-edit-post', id);
+    go('editor');
+    window.history.replaceState({}, '', `/admin/articles/${id}/edit`);
+  };
+  const remove = async (row: any) => {
+    const typed = prompt(`Type the exact title to permanently delete this article:\n${row.title}`);
+    if (
+      typed !== row.title ||
+      !confirm(
+        'This permanently deletes the article, versions, comments, bookmarks, and references. Continue?',
+      )
+    )
+      return;
+    await call(`/api/v1/posts/${row.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        title: typed,
+        confirmation: 'permanently delete',
+        reason: 'Deleted from editorial workspace',
+      }),
+    });
+    reload();
+  };
+  return (
+    <>
+      <Heading
+        eyebrow="Editorial workspace"
+        title="Articles"
+        description="Draft, refine, review and publish from one focused workspace."
+        action={
+          <button onClick={() => go('editor')} className="admin-primary">
+            <Icon name="plus" /> New article
+          </button>
+        }
+      />
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label className="admin-search flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3.5 py-2.5">
+          <Icon name="search" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search title, excerpt or author…"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+          />
+        </label>
+        <div className="admin-segment flex w-fit rounded-xl p-1" aria-label="Filter articles">
+          {['all', 'draft', 'in_review', 'published'].map((value) => (
+            <button
+              key={value}
+              onClick={() => setFilter(value)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${filter === value ? 'admin-segment-active shadow-sm' : 'text-muted hover:text-ink'}`}
+            >
+              {value.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+      </div>
+      {filtered.length === 0 ? (
+        <div className="admin-card mt-6 rounded-2xl border border-dashed p-12 text-center">
+          <span className="mx-auto grid size-11 place-items-center rounded-xl bg-surface text-muted">
+            <Icon name="articles" />
+          </span>
+          <h2 className="mt-4 font-semibold">No articles found</h2>
+          <p className="mt-1 text-sm text-muted">Try another filter or start a new article.</p>
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+          {filtered.map((row) => (
+            <article
+              key={row.id}
+              onClick={() => open(row.id)}
+              className="admin-card group relative cursor-pointer rounded-2xl p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <span className={`status-pill status-${row.state}`}>
+                  {String(row.state).replace('_', ' ')}
+                </span>
+                <div className="relative">
+                  <button
+                    aria-label={`More actions for ${row.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenu(menu === row.id ? '' : row.id);
+                    }}
+                    className="admin-icon-button"
+                  >
+                    <Icon name="more" />
+                  </button>
+                  {menu === row.id && (
+                    <div className="admin-menu absolute right-0 top-9 z-10 w-40 rounded-xl p-1.5 shadow-xl">
+                      {row.state === 'published' && (
+                        <a
+                          onClick={(event) => event.stopPropagation()}
+                          href={`/critiques/${row.slug}/`}
+                          target="_blank"
+                          className="admin-menu-item"
+                        >
+                          <Icon name="external" /> View live
+                        </a>
+                      )}
+                      <button
+                        className="admin-menu-item"
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          const fork = await call<any>(`/api/v1/posts/${row.id}/fork`, {
+                            method: 'POST',
+                            body: '{}',
+                          });
+                          open(fork.id);
+                        }}
+                      >
+                        <Icon name="copy" /> Duplicate
+                      </button>
+                      <button
+                        className="admin-menu-item text-red-600"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void remove(row);
+                        }}
+                      >
+                        <Icon name="trash" /> Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <h2 className="mt-5 line-clamp-2 font-display text-2xl font-semibold leading-tight tracking-[-.025em] group-hover:text-accent">
+                {row.title || 'Untitled article'}
+              </h2>
+              <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-relaxed text-muted">
+                {row.excerpt ||
+                  'No excerpt yet. Open the article to add a clear promise for readers.'}
+              </p>
+              <div className="mt-6 flex items-center justify-between border-t border-line pt-4 text-xs text-muted">
+                <span className="flex items-center gap-2">
+                  <span className="grid size-6 place-items-center rounded-full bg-surface font-bold text-ink">
+                    {row.author?.slice(0, 1) || 'A'}
+                  </span>
+                  {row.author || 'Editorial team'}
+                </span>
+                <span>
+                  {row.publishedAt
+                    ? `Published ${date(row.publishedAt)}`
+                    : `Edited ${date(row.updatedAt)}`}
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function Editor({ me }: { me: Me }) {
   const [id, setId] = useState('');
-  const [title, setTitle] = useState('Untitled critique');
+  const [title, setTitle] = useState('Untitled article');
   const [excerpt, setExcerpt] = useState('');
   const [revision, setRevision] = useState(1);
   const [state, setState] = useState('Not saved');
   const [error, setError] = useState('');
   const [versions, setVersions] = useState<any[]>([]);
   const [compare, setCompare] = useState<string[]>([]);
+  const [mode, setMode] = useState<'write' | 'preview'>('write');
+  const [wordCount, setWordCount] = useState(11);
   const [categories, setCategories] = useState<any[]>([]),
     [tags, setTags] = useState<any[]>([]),
     [category, setCategory] = useState(''),
@@ -726,14 +859,18 @@ function Editor({ me }: { me: Me }) {
     extensions: [StarterKit, EditorialImage.configure({ allowBase64: false })],
     content: '<p>Begin with the evidence. Explain the friction and propose a practical fix.</p>',
     immediatelyRender: false,
-    onUpdate: () => setState(navigator.onLine ? 'Waiting to save' : 'Offline'),
+    onUpdate: ({ editor: current }) => {
+      setWordCount(current.getText().trim().split(/\s+/).filter(Boolean).length);
+      setState(navigator.onLine ? 'Waiting to save' : 'Offline');
+    },
   });
   useEffect(() => {
     call<any[]>('/api/v1/categories').then(setCategories);
     call<any[]>('/api/v1/tags').then(setTags);
   }, []);
   useEffect(() => {
-    const editing = sessionStorage.getItem('rfs-edit-post');
+    const routeMatch = window.location.pathname.match(/^\/admin\/articles\/([^/]+)\/edit\/?$/);
+    const editing = routeMatch?.[1] ?? sessionStorage.getItem('rfs-edit-post');
     if (!editing) return;
     sessionStorage.removeItem('rfs-edit-post');
     call<any>(`/api/v1/posts/${editing}/draft`)
@@ -782,6 +919,7 @@ function Editor({ me }: { me: Me }) {
       setId(p.id);
       setRevision(p.revision);
       setState('Saved');
+      window.history.replaceState({}, '', `/admin/articles/${p.id}/edit`);
       loadVersions(p.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Create failed');
@@ -829,9 +967,33 @@ function Editor({ me }: { me: Me }) {
   };
   return (
     <>
-      <Heading eyebrow={id ? state : 'New draft'} title="Write a critique" />
+      <Heading
+        eyebrow={id ? 'Article editor' : 'Fresh draft'}
+        title={id ? 'Edit article' : 'Write something worth reading'}
+        description={
+          id
+            ? `${state} · Revision ${revision} · ${wordCount} words · ${Math.max(1, Math.ceil(wordCount / 220))} min read`
+            : 'Shape the idea, add evidence, then prepare it for publication.'
+        }
+        action={
+          <div className="admin-segment flex rounded-xl p-1">
+            <button
+              onClick={() => setMode('write')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${mode === 'write' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
+            >
+              <Icon name="edit" /> <span className="ml-1">Write</span>
+            </button>
+            <button
+              onClick={() => setMode('preview')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${mode === 'preview' ? 'admin-segment-active shadow-sm' : 'text-muted'}`}
+            >
+              <Icon name="eye" /> <span className="ml-1">Preview</span>
+            </button>
+          </div>
+        }
+      />
       {compare.length === 2 && (
-        <section className="mt-8 grid gap-4 border border-line bg-white p-5 md:grid-cols-2">
+        <section className="admin-card mt-6 grid gap-4 rounded-2xl p-5 md:grid-cols-2">
           {compare.map((versionId) => {
             const version = versions.find((item) => item.id === versionId);
             return (
@@ -841,7 +1003,7 @@ function Editor({ me }: { me: Me }) {
                 </p>
                 <h2 className="mt-2 font-display text-3xl">{version?.title}</h2>
                 <p className="mt-3 text-sm text-muted">{version?.excerpt}</p>
-                <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap bg-paper p-3 text-xs">
+                <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-surface p-3 text-xs">
                   {JSON.stringify(version?.content, null, 2)}
                 </pre>
               </article>
@@ -849,69 +1011,154 @@ function Editor({ me }: { me: Me }) {
           })}
         </section>
       )}
-      <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_18rem]">
-        <section className="border border-line bg-white p-[clamp(1.25rem,4vw,3rem)]">
-          <input
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              if (id) setState('Waiting to save');
-            }}
-            className="w-full border-0 border-b border-line pb-4 font-display text-[clamp(2.5rem,6vw,5rem)] leading-none outline-none"
-          />
-          <textarea
-            value={excerpt}
-            onChange={(e) => {
-              setExcerpt(e.target.value);
-              if (id) setState('Waiting to save');
-            }}
-            placeholder="A precise promise to the reader"
-            className="mt-5 w-full border border-line p-3"
-          />
-          <div className="mt-5 flex flex-wrap gap-2 border-y border-line py-3">
-            {[
-              ['Bold', () => editor?.chain().focus().toggleBold().run()],
-              ['H2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run()],
-              ['Quote', () => editor?.chain().focus().toggleBlockquote().run()],
-              ['List', () => editor?.chain().focus().toggleBulletList().run()],
-              ['Code', () => editor?.chain().focus().toggleCodeBlock().run()],
-            ].map(([label, fn]) => (
-              <button
-                key={String(label)}
-                onClick={fn as () => void}
-                className="border border-line px-3 py-1.5 text-xs"
-              >
-                {String(label)}
-              </button>
-            ))}
-            <label className="cursor-pointer border border-line px-3 py-1.5 text-xs">
-              Image
-              <input
-                type="file"
-                accept="image/jpeg,image/png"
-                className="sr-only"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) uploadImage(file);
-                  e.currentTarget.value = '';
-                }}
-              />
-            </label>
+      <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_17rem]">
+        <section className="admin-editor overflow-hidden rounded-2xl">
+          <div className="px-[clamp(1.25rem,5vw,4.5rem)] pt-[clamp(1.5rem,5vw,4rem)]">
+            <input
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (id) setState('Waiting to save');
+              }}
+              aria-label="Article title"
+              placeholder="Article title"
+              className="w-full border-0 bg-transparent font-display text-[clamp(2.35rem,5vw,4.5rem)] font-semibold leading-[1.02] tracking-[-.045em] outline-none placeholder:text-muted/35"
+            />
+            <textarea
+              value={excerpt}
+              onChange={(e) => {
+                setExcerpt(e.target.value);
+                if (id) setState('Waiting to save');
+              }}
+              placeholder="Write a concise summary that tells readers why this matters…"
+              maxLength={240}
+              className="mt-4 min-h-16 w-full resize-none border-0 bg-transparent text-lg leading-relaxed text-muted outline-none placeholder:text-muted/45"
+            />
+            <div className="flex justify-end text-[.65rem] text-muted">{excerpt.length}/240</div>
           </div>
-          <EditorContent
-            editor={editor}
-            className="article-body min-h-[32rem] py-8 [&_.tiptap]:min-h-[32rem] [&_.tiptap]:outline-none"
-          />
+          {mode === 'write' ? (
+            <>
+              <div className="admin-toolbar sticky top-0 z-[5] mt-5 flex flex-wrap items-center gap-1 border-y border-line px-3 py-2">
+                {[
+                  ['undo', 'Undo', () => editor?.chain().focus().undo().run(), false],
+                  ['redo', 'Redo', () => editor?.chain().focus().redo().run(), false],
+                  [
+                    'bold',
+                    'Bold',
+                    () => editor?.chain().focus().toggleBold().run(),
+                    editor?.isActive('bold'),
+                  ],
+                  [
+                    'italic',
+                    'Italic',
+                    () => editor?.chain().focus().toggleItalic().run(),
+                    editor?.isActive('italic'),
+                  ],
+                  [
+                    'strike',
+                    'Strike',
+                    () => editor?.chain().focus().toggleStrike().run(),
+                    editor?.isActive('strike'),
+                  ],
+                  [
+                    'h2',
+                    'Heading',
+                    () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+                    editor?.isActive('heading', { level: 2 }),
+                  ],
+                  [
+                    'quote',
+                    'Quote',
+                    () => editor?.chain().focus().toggleBlockquote().run(),
+                    editor?.isActive('blockquote'),
+                  ],
+                  [
+                    'list',
+                    'Bullets',
+                    () => editor?.chain().focus().toggleBulletList().run(),
+                    editor?.isActive('bulletList'),
+                  ],
+                  [
+                    'ordered',
+                    'Numbered list',
+                    () => editor?.chain().focus().toggleOrderedList().run(),
+                    editor?.isActive('orderedList'),
+                  ],
+                  [
+                    'code',
+                    'Code',
+                    () => editor?.chain().focus().toggleCodeBlock().run(),
+                    editor?.isActive('codeBlock'),
+                  ],
+                  [
+                    'rule',
+                    'Divider',
+                    () => editor?.chain().focus().setHorizontalRule().run(),
+                    false,
+                  ],
+                ].map(([icon, label, fn, active]) => (
+                  <button
+                    key={String(label)}
+                    title={String(label)}
+                    aria-label={String(label)}
+                    onClick={fn as () => void}
+                    className={`admin-tool ${active ? 'admin-tool-active' : ''}`}
+                  >
+                    <Icon name={String(icon)} />
+                  </button>
+                ))}
+                <span className="mx-1 h-5 w-px bg-line" />
+                <label className="admin-tool cursor-pointer" title="Add image">
+                  <Icon name="image" />
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadImage(file);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+              <EditorContent
+                editor={editor}
+                className="article-body min-h-[36rem] px-[clamp(1.25rem,5vw,4.5rem)] py-10 [&_.tiptap]:min-h-[36rem] [&_.tiptap]:outline-none"
+              />
+            </>
+          ) : (
+            <div className="min-h-[36rem] px-[clamp(1.25rem,5vw,4.5rem)] py-10">
+              <p className="mb-8 text-sm text-muted">Reader preview</p>
+              <h1 className="font-display text-[clamp(2.5rem,6vw,5rem)] font-semibold leading-none tracking-[-.045em]">
+                {title}
+              </h1>
+              <p className="mt-5 border-l-2 border-accent pl-4 text-lg leading-relaxed text-muted">
+                {excerpt}
+              </p>
+              <div
+                className="article-body mt-10"
+                dangerouslySetInnerHTML={{ __html: editor?.getHTML() ?? '' }}
+              />
+            </div>
+          )}
         </section>
-        <aside className="space-y-4">
-          <div className="border border-line bg-white p-5">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted">Publication</p>
+        <aside className="space-y-3 xl:sticky xl:top-6 xl:self-start">
+          <div className="admin-card rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted">Publication</p>
+              <span
+                className={`size-2 rounded-full ${state === 'Saved' || state.includes('Published') ? 'bg-emerald-500' : 'bg-amber-500'}`}
+              />
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              {me.publishMode === 'review_required'
+                ? 'This article will be sent to an editor for approval.'
+                : 'You can publish this article directly.'}
+            </p>
             {!id ? (
-              <button
-                onClick={create}
-                className="mt-5 w-full bg-ink px-4 py-3 text-sm font-semibold text-white"
-              >
-                Create draft
+              <button onClick={create} className="admin-primary mt-4 w-full justify-center">
+                <Icon name="save" /> Save draft
               </button>
             ) : (
               <>
@@ -925,9 +1172,9 @@ function Editor({ me }: { me: Me }) {
                       loadVersions(id);
                     })
                   }
-                  className="mt-5 w-full border border-line px-4 py-3 text-sm font-semibold"
+                  className="admin-secondary mt-4 w-full justify-center"
                 >
-                  Create checkpoint
+                  <Icon name="checkpoint" /> Checkpoint
                 </button>
                 <button
                   onClick={() =>
@@ -940,15 +1187,16 @@ function Editor({ me }: { me: Me }) {
                       ),
                     )
                   }
-                  className="mt-3 w-full bg-accent px-4 py-3 text-sm font-semibold text-white"
+                  className="admin-primary mt-2 w-full justify-center"
                 >
+                  <Icon name="send" />{' '}
                   {me.publishMode === 'review_required' ? 'Submit for review' : 'Publish now'}
                 </button>
               </>
             )}
           </div>
           {id && (
-            <div className="border border-line bg-white p-5">
+            <div className="admin-card rounded-2xl p-4">
               <p className="text-xs font-bold uppercase tracking-widest text-muted">
                 Classification
               </p>
@@ -957,7 +1205,7 @@ function Editor({ me }: { me: Me }) {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="mt-2 w-full border border-line px-2 py-2"
+                  className="admin-input mt-2 w-full rounded-lg px-2.5 py-2"
                 >
                   <option value="">Uncategorized</option>
                   {categories.map((c) => (
@@ -986,9 +1234,12 @@ function Editor({ me }: { me: Me }) {
               )}
               <fieldset className="mt-4">
                 <legend className="text-xs font-semibold">Tags</legend>
-                <div className="mt-2 grid gap-2">
+                <div className="mt-2 flex max-h-32 flex-wrap gap-1.5 overflow-auto">
                   {tags.map((t) => (
-                    <label key={t.id} className="text-xs">
+                    <label
+                      key={t.id}
+                      className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs ${selectedTags.includes(t.id) ? 'border-accent bg-accent/10 text-accent' : 'border-line text-muted'}`}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedTags.includes(t.id)}
@@ -997,7 +1248,7 @@ function Editor({ me }: { me: Me }) {
                             e.target.checked ? [...v, t.id] : v.filter((x) => x !== t.id),
                           )
                         }
-                        className="mr-2"
+                        className="sr-only"
                       />
                       {t.name}
                     </label>
@@ -1027,19 +1278,26 @@ function Editor({ me }: { me: Me }) {
                     }),
                   }).then(() => setState('Metadata saved'))
                 }
-                className="mt-4 w-full border border-line px-3 py-2 text-xs font-semibold"
+                className="admin-secondary mt-4 w-full justify-center"
               >
                 Save classification
               </button>
             </div>
           )}
-          <div className="border border-line bg-white p-5">
+          <div className="admin-card rounded-2xl p-4">
             <p className="text-xs font-bold uppercase tracking-widest text-muted">Autosave</p>
-            <p className="mt-3 text-sm">{state}</p>
-            <p className="mt-1 text-xs text-muted">Revision {revision}</p>
+            <p className="mt-3 flex items-center gap-2 text-sm">
+              <span
+                className={`size-2 rounded-full ${state === 'Saved' ? 'bg-emerald-500' : state === 'Offline' ? 'bg-red-500' : 'bg-amber-500'}`}
+              />
+              {state}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              Revision {revision} · {wordCount} words
+            </p>
           </div>
           {id && (
-            <div className="border border-line bg-white p-5">
+            <div className="admin-card rounded-2xl p-4">
               <p className="text-xs font-bold uppercase tracking-widest text-muted">
                 Version history
               </p>
@@ -1466,22 +1724,242 @@ function Profile({ me }: { me: Me }) {
 function Heading({
   eyebrow,
   title,
+  description,
   action,
 }: {
   eyebrow: string;
   title: string;
+  description?: string;
   action?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-5 border-b border-line pb-7">
+    <header className="flex flex-wrap items-end justify-between gap-5 border-b border-line pb-5">
       <div>
         <p className="text-xs font-bold uppercase tracking-[.18em] text-accent">{eyebrow}</p>
-        <h1 className="mt-3 font-display text-[clamp(2.5rem,5vw,4.8rem)] leading-none tracking-[-.045em]">
+        <h1 className="mt-2 font-display text-[clamp(2.25rem,4vw,3.5rem)] font-semibold leading-none tracking-[-.045em]">
           {title}
         </h1>
+        {description && <p className="mt-2 text-sm text-muted">{description}</p>}
       </div>
       {action}
     </header>
+  );
+}
+
+function Icon({ name }: { name: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    plus: <path d="M12 5v14M5 12h14" />,
+    articles: (
+      <>
+        <path d="M5 4h11a3 3 0 0 1 3 3v13H7a2 2 0 0 1-2-2V4Z" />
+        <path d="M8 8h7M8 12h7M8 16h4" />
+      </>
+    ),
+    library: (
+      <>
+        <path d="m4 19.5 5-2.5 5 2.5 6-3V4l-6 3-5-2.5L4 7v12.5Z" />
+        <path d="M9 4.5V17M14 7v12.5" />
+      </>
+    ),
+    editor: (
+      <>
+        <path d="M4 20h4l11-11-4-4L4 16v4Z" />
+        <path d="m13.5 6.5 4 4" />
+      </>
+    ),
+    reviews: (
+      <>
+        <path d="M9 11l2 2 4-5" />
+        <path d="M5 3h14v18H5z" />
+      </>
+    ),
+    media: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="m3 16 5-5 4 4 2-2 7 6M15 9h.01" />
+      </>
+    ),
+    comments: <path d="M4 5h16v11H8l-4 4V5Z" />,
+    reports: (
+      <>
+        <path d="M5 3v18M5 4h12l-2 4 2 4H5" />
+      </>
+    ),
+    people: (
+      <>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3 20c0-4 2-6 6-6s6 2 6 6M16 6a3 3 0 0 1 0 6M17 14c2.7.5 4 2.5 4 6" />
+      </>
+    ),
+    readers: (
+      <>
+        <path d="M4 5h7a3 3 0 0 1 3 3v11H7a3 3 0 0 0-3 2V5Z" />
+        <path d="M20 5h-3" />
+      </>
+    ),
+    sessions: (
+      <>
+        <rect x="3" y="4" width="18" height="14" rx="2" />
+        <path d="M8 21h8M12 18v3" />
+      </>
+    ),
+    audit: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    profile: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
+      </>
+    ),
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </>
+    ),
+    moon: <path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z" />,
+    logout: (
+      <>
+        <path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10" />
+      </>
+    ),
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-4-4" />
+      </>
+    ),
+    more: (
+      <>
+        <circle cx="5" cy="12" r="1" fill="currentColor" />
+        <circle cx="12" cy="12" r="1" fill="currentColor" />
+        <circle cx="19" cy="12" r="1" fill="currentColor" />
+      </>
+    ),
+    external: (
+      <>
+        <path d="M14 4h6v6M20 4l-9 9" />
+        <path d="M18 13v7H4V6h7" />
+      </>
+    ),
+    copy: (
+      <>
+        <rect x="8" y="8" width="11" height="12" rx="2" />
+        <path d="M16 8V4H5a2 2 0 0 0-2 2v11h5" />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" />
+      </>
+    ),
+    edit: (
+      <>
+        <path d="M4 20h4l11-11-4-4L4 16v4Z" />
+        <path d="m13.5 6.5 4 4" />
+      </>
+    ),
+    eye: (
+      <>
+        <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+    undo: (
+      <>
+        <path d="m9 7-5 5 5 5" />
+        <path d="M4 12h10a6 6 0 0 1 6 6" />
+      </>
+    ),
+    redo: (
+      <>
+        <path d="m15 7 5 5-5 5" />
+        <path d="M20 12H10a6 6 0 0 0-6 6" />
+      </>
+    ),
+    bold: (
+      <>
+        <path d="M7 4h6a4 4 0 0 1 0 8H7zM7 12h7a4 4 0 0 1 0 8H7z" />
+      </>
+    ),
+    italic: (
+      <>
+        <path d="M10 4h8M6 20h8M14 4 10 20" />
+      </>
+    ),
+    strike: (
+      <>
+        <path d="M6 8c0-3 2-4 6-4 3 0 5 1 6 3M6 16c1 3 3 4 6 4 4 0 6-2 6-4M3 12h18" />
+      </>
+    ),
+    h2: (
+      <>
+        <path d="M4 5v14M12 5v14M4 12h8M15 10c0-2 1-3 3-3s3 1 3 3c0 3-6 4-6 9h6" />
+      </>
+    ),
+    quote: (
+      <>
+        <path d="M5 8h5v5H7c0 3-1 5-3 6M14 8h5v5h-3c0 3-1 5-3 6" />
+      </>
+    ),
+    list: (
+      <>
+        <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+      </>
+    ),
+    ordered: (
+      <>
+        <path d="M10 6h11M10 12h11M10 18h11M4 4v4M3 8h3M3 11h2a1 1 0 0 1 0 2H3l3 3H3M3 18h3l-3 3h3" />
+      </>
+    ),
+    code: (
+      <>
+        <path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14" />
+      </>
+    ),
+    rule: <path d="M4 12h16" />,
+    image: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="m3 16 5-5 4 4 2-2 7 6" />
+      </>
+    ),
+    save: (
+      <>
+        <path d="M5 3h12l2 2v16H5z" />
+        <path d="M8 3v6h8V3M8 21v-7h8v7" />
+      </>
+    ),
+    checkpoint: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l4 2" />
+      </>
+    ),
+    send: (
+      <>
+        <path d="m3 11 18-8-8 18-2-8-8-2Z" />
+        <path d="m11 13 4-4" />
+      </>
+    ),
+  };
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="inline-block size-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {paths[name] ?? paths.articles}
+    </svg>
   );
 }
 function Empty({ title, text }: { title: string; text: string }) {

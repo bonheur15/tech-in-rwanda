@@ -1196,93 +1196,20 @@ function Editor({ me }: { me: Me }) {
             )}
           </div>
           {id && (
-            <div className="admin-card rounded-2xl p-4">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted">
-                Classification
-              </p>
-              <label className="mt-4 block text-xs font-semibold">
-                Category
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="admin-input mt-2 w-full rounded-lg px-2.5 py-2"
-                >
-                  <option value="">Uncategorized</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {me.role === 'superadmin' && (
-                <button
-                  onClick={async () => {
-                    const name = prompt('New category name');
-                    if (!name) return;
-                    const description = prompt('Short category description') ?? '';
-                    await call('/api/v1/categories', {
-                      method: 'POST',
-                      body: JSON.stringify({ name, description }),
-                    });
-                    setCategories(await call<any[]>('/api/v1/categories'));
-                  }}
-                  className="mt-2 text-xs font-semibold text-accent"
-                >
-                  Add category
-                </button>
-              )}
-              <fieldset className="mt-4">
-                <legend className="text-xs font-semibold">Tags</legend>
-                <div className="mt-2 flex max-h-32 flex-wrap gap-1.5 overflow-auto">
-                  {tags.map((t) => (
-                    <label
-                      key={t.id}
-                      className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs ${selectedTags.includes(t.id) ? 'border-accent bg-accent/10 text-accent' : 'border-line text-muted'}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedTags.includes(t.id)}
-                        onChange={(e) =>
-                          setSelectedTags((v) =>
-                            e.target.checked ? [...v, t.id] : v.filter((x) => x !== t.id),
-                          )
-                        }
-                        className="sr-only"
-                      />
-                      {t.name}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              {me.role === 'superadmin' && (
-                <button
-                  onClick={async () => {
-                    const name = prompt('New tag name');
-                    if (!name) return;
-                    await call('/api/v1/tags', { method: 'POST', body: JSON.stringify({ name }) });
-                    setTags(await call<any[]>('/api/v1/tags'));
-                  }}
-                  className="mt-2 text-xs font-semibold text-accent"
-                >
-                  Add tag
-                </button>
-              )}
-              <button
-                onClick={() =>
-                  call(`/api/v1/posts/${id}/metadata`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({
-                      categoryId: category,
-                      tagIds: selectedTags,
-                    }),
-                  }).then(() => setState('Metadata saved'))
-                }
-                className="admin-secondary mt-4 w-full justify-center"
-              >
-                Save classification
-              </button>
-            </div>
+            <TaxonomyPanel
+              postId={id}
+              canCreateCategory={me.role === 'superadmin'}
+              categories={categories}
+              setCategories={setCategories}
+              tags={tags}
+              setTags={setTags}
+              category={category}
+              setCategory={setCategory}
+              selectedTags={selectedTags}
+              setSelectedTags={setSelectedTags}
+              onSaved={setState}
+              onError={setError}
+            />
           )}
           <div className="admin-card rounded-2xl p-4">
             <p className="text-xs font-bold uppercase tracking-widest text-muted">Autosave</p>
@@ -1356,6 +1283,304 @@ function Editor({ me }: { me: Me }) {
         </aside>
       </div>
     </>
+  );
+}
+
+function TaxonomyPanel({
+  postId,
+  canCreateCategory,
+  categories,
+  setCategories,
+  tags,
+  setTags,
+  category,
+  setCategory,
+  selectedTags,
+  setSelectedTags,
+  onSaved,
+  onError,
+}: {
+  postId: string;
+  canCreateCategory: boolean;
+  categories: any[];
+  setCategories: React.Dispatch<React.SetStateAction<any[]>>;
+  tags: any[];
+  setTags: React.Dispatch<React.SetStateAction<any[]>>;
+  category: string;
+  setCategory: (value: string) => void;
+  selectedTags: string[];
+  setSelectedTags: (value: string[]) => void;
+  onSaved: (value: string) => void;
+  onError: (value: string) => void;
+}) {
+  const [creating, setCreating] = useState<'category' | 'tag' | null>(null);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('Changes save automatically');
+  const visibleTags = tags.filter((tag) => tag.name.toLowerCase().includes(query.toLowerCase()));
+
+  const saveMetadata = async (nextCategory: string, nextTags: string[]) => {
+    setMessage('Saving…');
+    onError('');
+    try {
+      await call(`/api/v1/posts/${postId}/metadata`, {
+        method: 'PATCH',
+        body: JSON.stringify({ categoryId: nextCategory, tagIds: nextTags }),
+      });
+      setMessage('Saved');
+      onSaved('Metadata saved');
+    } catch (error) {
+      setMessage('Could not save');
+      onError(error instanceof Error ? error.message : 'Could not save classification');
+    }
+  };
+
+  const chooseCategory = (value: string) => {
+    setCategory(value);
+    void saveMetadata(value, selectedTags);
+  };
+
+  const toggleTag = (tagId: string) => {
+    const next = selectedTags.includes(tagId)
+      ? selectedTags.filter((id) => id !== tagId)
+      : [...selectedTags, tagId];
+    setSelectedTags(next);
+    void saveMetadata(category, next);
+  };
+
+  const closeCreator = () => {
+    setCreating(null);
+    setName('');
+    setDescription('');
+  };
+
+  const createTaxonomy = async (event: SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    onError('');
+    try {
+      const endpoint = creating === 'category' ? '/api/v1/categories' : '/api/v1/tags';
+      const created = await call<{ id: string }>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+      });
+      if (creating === 'category') {
+        const nextCategories = await call<any[]>('/api/v1/categories');
+        setCategories(nextCategories);
+        setCategory(created.id);
+        await saveMetadata(created.id, selectedTags);
+      } else {
+        const nextTags = await call<any[]>('/api/v1/tags');
+        const nextSelected = [...selectedTags, created.id];
+        setTags(nextTags);
+        setSelectedTags(nextSelected);
+        await saveMetadata(category, nextSelected);
+      }
+      closeCreator();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : `Could not create ${creating}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="taxonomy-panel overflow-hidden rounded-2xl">
+      <header className="flex items-start justify-between border-b border-line px-4 py-4">
+        <div className="flex items-center gap-3">
+          <span className="taxonomy-icon grid size-9 place-items-center rounded-xl">
+            <Icon name="tag" />
+          </span>
+          <div>
+            <h2 className="text-sm font-bold">Organize article</h2>
+            <p className="mt-0.5 text-[.68rem] text-muted">Help readers discover this story</p>
+          </div>
+        </div>
+        <span
+          className={`mt-1 flex items-center gap-1.5 text-[.65rem] ${message === 'Could not save' ? 'text-amber-600' : 'text-muted'}`}
+        >
+          <span
+            className={`size-1.5 rounded-full ${message === 'Saving…' ? 'animate-pulse bg-amber-500' : message === 'Saved' ? 'bg-teal-500' : 'bg-line'}`}
+          />
+          {message}
+        </span>
+      </header>
+
+      <div className="space-y-5 p-4">
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <label htmlFor="article-category" className="text-xs font-bold">
+              Category
+            </label>
+            {canCreateCategory && creating !== 'category' && (
+              <button
+                onClick={() => {
+                  setCreating('category');
+                  setName('');
+                }}
+                className="taxonomy-link"
+              >
+                <Icon name="plus" /> New
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <select
+              id="article-category"
+              value={category}
+              onChange={(event) => chooseCategory(event.target.value)}
+              className="taxonomy-select w-full appearance-none rounded-xl px-3 py-2.5 pr-9 text-xs font-semibold outline-none"
+            >
+              <option value="">No category</option>
+              {categories.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted">
+              <Icon name="chevron" />
+            </span>
+          </div>
+          {categories.length === 0 && !creating && (
+            <p className="mt-2 text-[.68rem] leading-relaxed text-muted">
+              No categories yet. Articles can still be published without one.
+            </p>
+          )}
+        </div>
+
+        {creating === 'category' && (
+          <form onSubmit={createTaxonomy} className="taxonomy-creator rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold">Create category</p>
+              <button
+                type="button"
+                onClick={closeCreator}
+                className="admin-icon-button -mr-1 -mt-1"
+                aria-label="Cancel"
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+            <input
+              autoFocus
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Category name"
+              className="taxonomy-field mt-3 w-full rounded-lg px-3 py-2 text-xs outline-none"
+            />
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Short description (optional)"
+              className="taxonomy-field mt-2 min-h-16 w-full resize-none rounded-lg px-3 py-2 text-xs outline-none"
+            />
+            <button disabled={busy} className="taxonomy-action mt-2 w-full justify-center">
+              <Icon name="plus" /> {busy ? 'Creating…' : 'Create and select'}
+            </button>
+          </form>
+        )}
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <label htmlFor="tag-search" className="text-xs font-bold">
+              Topics{' '}
+              <span className="font-normal text-muted">
+                {selectedTags.length ? `· ${selectedTags.length} selected` : ''}
+              </span>
+            </label>
+            {creating !== 'tag' && (
+              <button
+                onClick={() => {
+                  setCreating('tag');
+                  setName('');
+                }}
+                className="taxonomy-link"
+              >
+                <Icon name="plus" /> New
+              </button>
+            )}
+          </div>
+          {tags.length > 5 && (
+            <label className="taxonomy-search mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2">
+              <Icon name="search" />
+              <input
+                id="tag-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Find a topic…"
+                className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+              />
+            </label>
+          )}
+          {tags.length === 0 ? (
+            <button
+              onClick={() => setCreating('tag')}
+              className="taxonomy-empty w-full rounded-xl border border-dashed p-4 text-center"
+            >
+              <span className="mx-auto grid size-8 place-items-center rounded-full">
+                <Icon name="tag" />
+              </span>
+              <strong className="mt-2 block text-xs">Add the first topic</strong>
+              <span className="mt-1 block text-[.68rem] text-muted">
+                Topics connect related articles.
+              </span>
+            </button>
+          ) : (
+            <div className="flex max-h-36 flex-wrap gap-1.5 overflow-auto">
+              {visibleTags.map((tag) => {
+                const active = selectedTags.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.id)}
+                    aria-pressed={active}
+                    className={`taxonomy-chip ${active ? 'taxonomy-chip-active' : ''}`}
+                  >
+                    {active && <Icon name="check" />}
+                    {tag.name}
+                  </button>
+                );
+              })}
+              {visibleTags.length === 0 && (
+                <p className="py-3 text-xs text-muted">No matching topics.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {creating === 'tag' && (
+          <form onSubmit={createTaxonomy} className="taxonomy-creator rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold">Create topic</p>
+              <button
+                type="button"
+                onClick={closeCreator}
+                className="admin-icon-button -mr-1 -mt-1"
+                aria-label="Cancel"
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+            <input
+              autoFocus
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Topic name"
+              className="taxonomy-field mt-3 w-full rounded-lg px-3 py-2 text-xs outline-none"
+            />
+            <button disabled={busy} className="taxonomy-action mt-2 w-full justify-center">
+              <Icon name="plus" /> {busy ? 'Creating…' : 'Create and select'}
+            </button>
+          </form>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1946,6 +2171,15 @@ function Icon({ name }: { name: string }) {
         <path d="m11 13 4-4" />
       </>
     ),
+    tag: (
+      <>
+        <path d="M20 13 13 20 4 11V4h7l9 9Z" />
+        <circle cx="8.5" cy="8.5" r="1" />
+      </>
+    ),
+    chevron: <path d="m8 10 4 4 4-4" />,
+    close: <path d="m6 6 12 12M18 6 6 18" />,
+    check: <path d="m5 12 4 4L19 6" />,
   };
   return (
     <svg

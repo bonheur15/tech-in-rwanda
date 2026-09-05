@@ -29,8 +29,11 @@ func JSONMeta(w http.ResponseWriter, status int, data any, meta map[string]any) 
 	_ = json.NewEncoder(w).Encode(map[string]any{"data": data, "meta": meta})
 }
 func Failure(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	FailureDetails(w, r, status, code, message, nil)
+}
+func FailureDetails(w http.ResponseWriter, r *http.Request, status int, code, message string, details any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"error": Error{Code: code, Message: message, RequestID: requestmeta.ID(r.Context())}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"error": Error{Code: code, Message: message, RequestID: requestmeta.ID(r.Context()), Details: details}})
 }

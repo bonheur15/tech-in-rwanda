@@ -223,7 +223,7 @@ func (a *API) adminMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	if !requireStaff(w, r, x) {
 		return
 	}
-	query := "SELECT id,content_hash,mime_type,width,height,bytes,alt_text,caption,credit,status,created_at,owner_id FROM media_assets"
+	query := "SELECT id,content_hash,mime_type,width,height,bytes,alt_text,caption,credit,status,created_at,owner_id,crop_aspect,focal_x,focal_y FROM media_assets"
 	args := []any{}
 	if x.Role != "superadmin" {
 		query += " WHERE owner_id=?"
@@ -239,9 +239,11 @@ func (a *API) adminMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var id, hash, mime, alt, caption, credit, status, created, owner string
+		var crop string
 		var width, height, bytes int
-		rows.Scan(&id, &hash, &mime, &width, &height, &bytes, &alt, &caption, &credit, &status, &created, &owner)
-		out = append(out, map[string]any{"id": id, "hash": hash, "src": "/media/" + hash + "/small.jpg", "mimeType": mime, "width": width, "height": height, "bytes": bytes, "alt": alt, "caption": caption, "credit": credit, "status": status, "createdAt": created, "ownerId": owner})
+		var focalX, focalY *float64
+		rows.Scan(&id, &hash, &mime, &width, &height, &bytes, &alt, &caption, &credit, &status, &created, &owner, &crop, &focalX, &focalY)
+		out = append(out, map[string]any{"id": id, "hash": hash, "src": "/media/" + hash + "/small.jpg", "mimeType": mime, "width": width, "height": height, "bytes": bytes, "alt": alt, "caption": caption, "credit": credit, "status": status, "createdAt": created, "ownerId": owner, "cropAspect": crop, "focalX": focalX, "focalY": focalY})
 	}
 	httpx.JSON(w, 200, out)
 }
@@ -380,7 +382,7 @@ func (a *API) attachMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		return
 	}
 	var in struct{ Placement string }
-	if decode(r, &in) != nil || !map[string]bool{"thumbnail": true, "center": true, "wide": true, "full": true, "left": true, "right": true}[in.Placement] {
+	if decode(r, &in) != nil || !map[string]bool{"thumbnail": true, "small": true, "center": true, "wide": true, "full": true, "left": true, "right": true}[in.Placement] {
 		httpx.Failure(w, r, 400, "invalid_placement", "Choose a supported image placement")
 		return
 	}
@@ -410,6 +412,22 @@ func (a *API) attachMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		err = tx.Commit()
 	}
 	respond(w, r, map[string]bool{"attached": err == nil}, err, 200)
+}
+
+func (a *API) unsetFeaturedImage(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if !requireStaff(w, r, x) {
+		return
+	}
+	p, err := a.Editorial.GetDraft(r.Context(), x, r.PathValue("id"))
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	_, err = a.DB.ExecContext(r.Context(), "UPDATE posts SET thumbnail_asset_id=NULL,updated_at=? WHERE id=?", time.Now().UTC().Format(time.RFC3339Nano), p.ID)
+	if err == nil {
+		_, err = a.DB.ExecContext(r.Context(), "DELETE FROM article_media WHERE post_id=? AND placement='thumbnail'", p.ID)
+	}
+	respond(w, r, map[string]bool{"unset": err == nil}, err, 200)
 }
 
 func (a *API) createCategory(w http.ResponseWriter, r *http.Request, x auth.Actor) {

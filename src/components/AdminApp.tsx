@@ -1,19 +1,9 @@
-import Image from '@tiptap/extension-image';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { EditorToolbar } from './editor/EditorToolbar';
+import { editorExtensions } from './editor/extensions';
+import { RichContent } from './editor/RichContent';
 import { useModalDialog } from './ModalDialog';
-
-const EditorialImage = Image.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      placement: { default: 'center' },
-      caption: { default: '' },
-      credit: { default: '' },
-    };
-  },
-});
 
 type Me = {
   identityId: string;
@@ -53,6 +43,15 @@ const tabs: [Tab, string][] = [
   ['audit', 'Audit log'],
   ['profile', 'Profile'],
 ];
+function missingImageAltCount(node: any): number {
+  return (
+    (node?.type === 'image' && !node?.attrs?.alt?.trim() ? 1 : 0) +
+    (node?.content ?? []).reduce(
+      (total: number, child: any) => total + missingImageAltCount(child),
+      0,
+    )
+  );
+}
 const routeFor = (tab: Tab) => `/admin/${tab === 'editor' ? 'write' : tab}`;
 const tabFromPath = (path: string): Tab => {
   if (/^\/admin\/articles\/[^/]+\/edit\/?$/.test(path)) return 'editor';
@@ -327,10 +326,7 @@ function Dashboard({
   setTheme: (v: 'light' | 'dark') => void;
   signOut: () => void;
 }) {
-  const [zenMode, setZenMode] = useState(tab === 'editor');
-  useEffect(() => {
-    setZenMode(tab === 'editor');
-  }, [tab]);
+  const [zenMode, setZenMode] = useState(false);
   const visible = tabs.filter(
     ([id]) =>
       id !== 'editor' &&
@@ -929,7 +925,7 @@ function Editor({
 }) {
   const modal = useModalDialog();
   const [id, setId] = useState('');
-  const [title, setTitle] = useState('Untitled article');
+  const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [revision, setRevision] = useState(1);
   const [state, setState] = useState('Not saved');
@@ -937,7 +933,9 @@ function Editor({
   const [versions, setVersions] = useState<any[]>([]);
   const [compare, setCompare] = useState<string[]>([]);
   const [mode, setMode] = useState<'write' | 'preview'>('write');
-  const [wordCount, setWordCount] = useState(11);
+  const [wordCount, setWordCount] = useState(0);
+  const [selectedImage, setSelectedImage] = useState<any>(null);
+  const createRequest = useRef<Promise<any> | null>(null);
   const [categories, setCategories] = useState<any[]>([]),
     [tags, setTags] = useState<any[]>([]),
     [category, setCategory] = useState(''),
@@ -950,12 +948,15 @@ function Editor({
     [],
   );
   const editor = useEditor({
-    extensions: [StarterKit, EditorialImage.configure({ allowBase64: false })],
-    content: '<p>Begin with the evidence. Explain the friction and propose a practical fix.</p>',
+    extensions: editorExtensions,
+    content: { type: 'doc', content: [{ type: 'paragraph' }] },
     immediatelyRender: false,
     onUpdate: ({ editor: current }) => {
       setWordCount(current.getText().trim().split(/\s+/).filter(Boolean).length);
       setState(navigator.onLine ? 'Waiting to save' : 'Offline');
+    },
+    onSelectionUpdate: ({ editor: current }) => {
+      setSelectedImage(current.isActive('image') ? current.getAttributes('image') : null);
     },
   });
   useEffect(() => {
@@ -975,81 +976,91 @@ function Editor({
         setRevision(p.revision);
         setCategory(p.categoryId ?? '');
         setSelectedTags(p.tagIds ?? []);
-        editor?.commands.setContent(p.content);
-        setState('Saved');
+        const recovered = localStorage.getItem(`rfs-draft-${p.id}`);
+        if (recovered) {
+          const pending = JSON.parse(recovered);
+          setTitle(pending.title ?? p.title);
+          setExcerpt(pending.excerpt ?? p.excerpt);
+          editor?.commands.setContent(pending.content ?? p.content);
+          setState('Recovered');
+        } else {
+          editor?.commands.setContent(p.content);
+          setState('Saved');
+        }
         loadVersions(p.id);
       })
       .catch((e) => setError(e.message));
   }, [editor, loadVersions]);
   useEffect(() => {
-    if (!id || state !== 'Waiting to save') return;
+    if (!id || (state !== 'Waiting to save' && state !== 'Recovered')) return;
     const timer = setTimeout(async () => {
       setState('Saving…');
       try {
+        const pending = { title, excerpt, content: editor?.getJSON(), revision };
+        localStorage.setItem(`rfs-draft-${id}`, JSON.stringify(pending));
         const p = await call<any>(`/api/v1/posts/${id}/draft`, {
           method: 'PUT',
-          body: JSON.stringify({
-            title,
-            excerpt,
-            content: editor?.getJSON(),
-            revision,
-          }),
+          body: JSON.stringify(pending),
         });
         setRevision(p.revision);
+        localStorage.removeItem(`rfs-draft-${id}`);
         setState('Saved');
       } catch (e) {
-        setState('Retrying');
+        setState(navigator.onLine ? 'Saving failed · retrying' : 'Offline · changes kept');
         setError(e instanceof Error ? e.message : 'Save failed');
       }
     }, 2000);
     return () => clearTimeout(timer);
   }, [id, state, title, excerpt, editor, revision]);
   const create = async () => {
-    try {
-      const p = await call<any>('/api/v1/posts', {
+    if (id) return null;
+    if (!createRequest.current)
+      createRequest.current = call<any>('/api/v1/posts', {
         method: 'POST',
         body: JSON.stringify({ title, excerpt, content: editor?.getJSON() }),
+      }).finally(() => {
+        createRequest.current = null;
       });
+    try {
+      setState('Saving…');
+      const p = await createRequest.current;
       setId(p.id);
       setRevision(p.revision);
       setState('Saved');
       window.history.replaceState({}, '', `/admin/articles/${p.id}/edit`);
       loadVersions(p.id);
+      return p;
     } catch (e) {
+      setState(navigator.onLine ? 'Saving failed · retrying' : 'Offline · changes kept');
       setError(e instanceof Error ? e.message : 'Create failed');
+      return null;
     }
   };
+  useEffect(() => {
+    if (id || !editor) return;
+    const meaningful =
+      title.trim() ||
+      excerpt.trim() ||
+      editor.getText().trim() ||
+      editor.getJSON().content?.some((node: any) => node.type === 'image');
+    if (!meaningful) return;
+    const timer = setTimeout(() => void create(), 300);
+    return () => clearTimeout(timer);
+  }, [id, title, excerpt, wordCount, editor]);
+  useEffect(() => {
+    const retry = () => {
+      if (id && state.includes('Offline')) setState('Waiting to save');
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [id, state]);
   const uploadImage = async (file: File) => {
-    if (!id) {
-      setError('Create the draft before adding images.');
-      return;
-    }
-    const details = await modal.open({
-      title: 'Add image details',
-      description: 'Accessible descriptions help every reader understand the image.',
-      confirmLabel: 'Upload image',
-      fields: [
-        { name: 'alt', label: 'Alternative text', required: true },
-        { name: 'caption', label: 'Caption (optional)' },
-        { name: 'credit', label: 'Credit (optional)' },
-        {
-          name: 'placement',
-          label: 'Placement',
-          type: 'select',
-          value: 'center',
-          options: [
-            { label: 'Centered', value: 'center' },
-            { label: 'Wide', value: 'wide' },
-            { label: 'Full width', value: 'full' },
-            { label: 'Float left', value: 'left' },
-            { label: 'Float right', value: 'right' },
-            { label: 'Thumbnail', value: 'thumbnail' },
-          ],
-        },
-      ],
-    });
-    if (!details) return;
-    const { alt, caption, credit, placement } = details;
+    const post = id ? { id } : await create();
+    if (!post?.id) return;
+    const alt = '',
+      caption = '',
+      credit = '',
+      placement = 'center';
     const form = new FormData();
     form.set('file', file);
     form.set('alt', alt);
@@ -1060,27 +1071,53 @@ function Editor({
         method: 'POST',
         body: form,
       });
-      await call(`/api/v1/posts/${id}/media/${asset.id}`, {
-        method: 'POST',
-        body: JSON.stringify({ placement }),
-      });
-      if (placement !== 'thumbnail')
-        editor
-          ?.chain()
-          .focus()
-          .setImage({ src: asset.src, alt, title: caption, placement, caption, credit } as any)
-          .run();
+      editor
+        ?.chain()
+        .focus()
+        .setImage({
+          assetId: asset.id,
+          src: asset.src,
+          alt,
+          title: caption,
+          placement,
+          caption,
+          credit,
+          width: 100,
+          cropAspect: 'original',
+          focalX: 0.5,
+          focalY: 0.5,
+        } as any)
+        .run();
       setState('Waiting to save');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Image upload failed');
     }
   };
+  const saveImageMetadata = async (attributes: any) => {
+    if (!attributes?.assetId) return;
+    try {
+      await call(`/api/v1/media/${attributes.assetId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          alt: attributes.alt ?? '',
+          caption: attributes.caption ?? '',
+          credit: attributes.credit ?? '',
+          cropAspect: attributes.cropAspect ?? 'original',
+          focalX: attributes.focalX ?? 0.5,
+          focalY: attributes.focalY ?? 0.5,
+        }),
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Image metadata could not be saved');
+    }
+  };
+  const preflightImageIssues = missingImageAltCount(editor?.getJSON());
   return (
     <>
       {!zenMode && (
         <Heading
           eyebrow={id ? 'Article editor' : 'Fresh draft'}
-          title={id ? 'Edit article' : 'Write something worth reading'}
+          title={id ? 'Edit article' : 'New article'}
           description={
             id
               ? `${state} · Revision ${revision} · ${wordCount} words · ${Math.max(1, Math.ceil(wordCount / 220))} min read`
@@ -1126,19 +1163,19 @@ function Editor({
                 </p>
                 <h2 className="mt-2 font-display text-3xl">{version?.title}</h2>
                 <p className="mt-3 text-sm text-muted">{version?.excerpt}</p>
-                <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-surface p-3 text-xs">
-                  {JSON.stringify(version?.content, null, 2)}
-                </pre>
+                <div className="article-body mt-4 max-h-96 overflow-auto rounded-xl bg-surface p-4">
+                  <RichContent node={version?.content} />
+                </div>
               </article>
             );
           })}
         </section>
       )}
       <div
-        className={`${zenMode ? 'mx-auto max-w-[90rem] pb-20' : 'mt-4 sm:mt-6 2xl:grid-cols-[minmax(0,1fr)_20rem]'} grid gap-4 sm:gap-5`}
+        className={`${zenMode ? 'mx-auto max-w-[82rem] pb-24' : 'editor-workspace mt-4 sm:mt-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]'} grid gap-4 xl:gap-5`}
       >
-        <section className="admin-editor overflow-hidden rounded-2xl">
-          <div className="px-[clamp(1rem,5vw,4.5rem)] pt-[clamp(1.25rem,5vw,4rem)]">
+        <section className="admin-editor editor-paper overflow-hidden rounded-xl">
+          <div className="editor-masthead px-[clamp(1.25rem,6vw,5.5rem)] pt-[clamp(2rem,6vw,5rem)]">
             <input
               value={title}
               onChange={(e) => {
@@ -1147,7 +1184,7 @@ function Editor({
               }}
               aria-label="Article title"
               placeholder="Article title"
-              className="w-full border-0 bg-transparent font-display text-[clamp(2rem,5vw,4.5rem)] font-semibold leading-[1.02] tracking-[-.045em] outline-none placeholder:text-muted/35"
+              className="editor-title w-full border-0 bg-transparent font-display text-[clamp(2.35rem,5vw,4rem)] font-semibold leading-[1.04] tracking-[-.04em] outline-none placeholder:text-muted/30"
             />
             <textarea
               value={excerpt}
@@ -1157,99 +1194,40 @@ function Editor({
               }}
               placeholder="Write a concise summary that tells readers why this matters…"
               maxLength={240}
-              className="mt-3 min-h-16 w-full resize-none border-0 bg-transparent text-base leading-relaxed text-muted outline-none placeholder:text-muted/45 sm:mt-4 sm:text-lg"
+              className="editor-excerpt mt-4 min-h-16 w-full resize-none border-0 bg-transparent text-base leading-relaxed text-muted outline-none placeholder:text-muted/45 sm:text-lg"
             />
-            <div className="flex justify-end text-[.65rem] text-muted">{excerpt.length}/240</div>
+            <div className="editor-excerpt-count flex justify-end text-[.65rem] text-muted">
+              {excerpt.length}/240
+            </div>
           </div>
           {mode === 'write' ? (
             <>
-              <div className="admin-toolbar sticky top-0 z-[5] mt-5 flex flex-wrap items-center gap-1 border-y border-line px-3 py-2">
-                {[
-                  ['undo', 'Undo', () => editor?.chain().focus().undo().run(), false],
-                  ['redo', 'Redo', () => editor?.chain().focus().redo().run(), false],
-                  [
-                    'bold',
-                    'Bold',
-                    () => editor?.chain().focus().toggleBold().run(),
-                    editor?.isActive('bold'),
-                  ],
-                  [
-                    'italic',
-                    'Italic',
-                    () => editor?.chain().focus().toggleItalic().run(),
-                    editor?.isActive('italic'),
-                  ],
-                  [
-                    'strike',
-                    'Strike',
-                    () => editor?.chain().focus().toggleStrike().run(),
-                    editor?.isActive('strike'),
-                  ],
-                  [
-                    'h2',
-                    'Heading',
-                    () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
-                    editor?.isActive('heading', { level: 2 }),
-                  ],
-                  [
-                    'quote',
-                    'Quote',
-                    () => editor?.chain().focus().toggleBlockquote().run(),
-                    editor?.isActive('blockquote'),
-                  ],
-                  [
-                    'list',
-                    'Bullets',
-                    () => editor?.chain().focus().toggleBulletList().run(),
-                    editor?.isActive('bulletList'),
-                  ],
-                  [
-                    'ordered',
-                    'Numbered list',
-                    () => editor?.chain().focus().toggleOrderedList().run(),
-                    editor?.isActive('orderedList'),
-                  ],
-                  [
-                    'code',
-                    'Code',
-                    () => editor?.chain().focus().toggleCodeBlock().run(),
-                    editor?.isActive('codeBlock'),
-                  ],
-                  [
-                    'rule',
-                    'Divider',
-                    () => editor?.chain().focus().setHorizontalRule().run(),
-                    false,
-                  ],
-                ].map(([icon, label, fn, active]) => (
-                  <button
-                    key={String(label)}
-                    title={String(label)}
-                    aria-label={String(label)}
-                    onClick={fn as () => void}
-                    className={`admin-tool ${active ? 'admin-tool-active' : ''}`}
-                  >
-                    <Icon name={String(icon)} />
-                  </button>
-                ))}
-                <span className="mx-1 h-5 w-px bg-line" />
-                <label className="admin-tool cursor-pointer" title="Add image">
-                  <Icon name="image" />
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    className="sr-only"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) uploadImage(file);
-                      e.currentTarget.value = '';
-                    }}
-                  />
-                </label>
-              </div>
+              <EditorToolbar
+                editor={editor}
+                onUpload={uploadImage}
+                onLibrary={() =>
+                  setError('Choose Media in the newsroom navigation to reuse an asset.')
+                }
+              />
               <EditorContent
                 editor={editor}
-                className="article-body min-h-[24rem] px-[clamp(1rem,5vw,4.5rem)] py-6 sm:min-h-[36rem] sm:py-10 sm:[&_.tiptap]:min-h-[36rem] [&_.tiptap]:min-h-[24rem] [&_.tiptap]:outline-none"
+                onDrop={(event) => {
+                  const file = event.dataTransfer.files?.[0];
+                  if (file && /^image\/(jpeg|png)$/.test(file.type)) {
+                    event.preventDefault();
+                    void uploadImage(file);
+                  }
+                }}
+                onPaste={(event) => {
+                  const file = Array.from(event.clipboardData.files).find((file) =>
+                    /^image\/(jpeg|png)$/.test(file.type),
+                  );
+                  if (file) {
+                    event.preventDefault();
+                    void uploadImage(file);
+                  }
+                }}
+                className="article-body editor-document min-h-[28rem] px-[clamp(1.25rem,6vw,5.5rem)] py-8 sm:min-h-[40rem] sm:py-12 sm:[&_.tiptap]:min-h-[40rem] [&_.tiptap]:min-h-[28rem] [&_.tiptap]:outline-none"
               />
             </>
           ) : (
@@ -1261,29 +1239,214 @@ function Editor({
               <p className="mt-5 border-l-2 border-accent pl-4 text-lg leading-relaxed text-muted">
                 {excerpt}
               </p>
-              <div
-                className="article-body mt-10"
-                dangerouslySetInnerHTML={{ __html: editor?.getHTML() ?? '' }}
-              />
+              <div className="article-body mt-10">
+                <RichContent node={editor?.getJSON()} />
+              </div>
             </div>
           )}
         </section>
         {!zenMode && (
-          <aside className="space-y-3 2xl:sticky 2xl:top-6 2xl:self-start">
-            <div className="admin-card rounded-2xl p-4">
+          <aside className="editor-inspector space-y-3 xl:sticky xl:top-5 xl:self-start">
+            {selectedImage && (
+              <div
+                className="admin-card image-inspector rounded-2xl p-4"
+                aria-label="Image inspector"
+              >
+                <p className="text-xs font-bold uppercase tracking-widest text-muted">Image</p>
+                {!selectedImage.alt?.trim() && (
+                  <p className="mt-2 text-xs text-amber-700" role="status">
+                    Alternative text is required before submission.
+                  </p>
+                )}
+                <label className="media-field-label mt-3">
+                  Alternative text
+                  <input
+                    className="media-field"
+                    value={selectedImage.alt ?? ''}
+                    onBlur={() => void saveImageMetadata(selectedImage)}
+                    onChange={(event) => {
+                      const alt = event.target.value;
+                      editor?.chain().focus().updateAttributes('image', { alt }).run();
+                      setSelectedImage({ ...selectedImage, alt });
+                      setState('Waiting to save');
+                    }}
+                  />
+                </label>
+                <label className="media-field-label mt-3">
+                  Caption
+                  <input
+                    className="media-field"
+                    value={selectedImage.caption ?? ''}
+                    onBlur={() => void saveImageMetadata(selectedImage)}
+                    onChange={(event) => {
+                      const caption = event.target.value;
+                      editor?.chain().focus().updateAttributes('image', { caption }).run();
+                      setSelectedImage({ ...selectedImage, caption });
+                      setState('Waiting to save');
+                    }}
+                  />
+                </label>
+                <label className="media-field-label mt-3">
+                  Credit or source
+                  <input
+                    className="media-field"
+                    value={selectedImage.credit ?? ''}
+                    onBlur={() => void saveImageMetadata(selectedImage)}
+                    onChange={(event) => {
+                      const credit = event.target.value;
+                      editor?.chain().focus().updateAttributes('image', { credit }).run();
+                      setSelectedImage({ ...selectedImage, credit });
+                      setState('Waiting to save');
+                    }}
+                  />
+                </label>
+                <label className="media-field-label mt-3">
+                  Placement
+                  <select
+                    className="media-field"
+                    value={selectedImage.placement ?? 'center'}
+                    onChange={(event) => {
+                      const placement = event.target.value;
+                      const width = Math.min(
+                        Number(selectedImage.width) || 100,
+                        placement === 'left' || placement === 'right' ? 60 : 100,
+                      );
+                      editor?.chain().focus().updateAttributes('image', { placement, width }).run();
+                      setSelectedImage({ ...selectedImage, placement, width });
+                      setState('Waiting to save');
+                    }}
+                  >
+                    {[
+                      ['small', 'Small'],
+                      ['center', 'Centered'],
+                      ['wide', 'Wide'],
+                      ['full', 'Full bleed'],
+                      ['left', 'Float left'],
+                      ['right', 'Float right'],
+                    ].map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="media-field-label mt-3">
+                  Width: {selectedImage.width ?? 100}%
+                  <input
+                    className="w-full"
+                    type="range"
+                    min="30"
+                    max={
+                      selectedImage.placement === 'left' || selectedImage.placement === 'right'
+                        ? 60
+                        : 100
+                    }
+                    step="5"
+                    value={selectedImage.width ?? 100}
+                    onChange={(event) => {
+                      const width = Number(event.target.value);
+                      editor?.chain().focus().updateAttributes('image', { width }).run();
+                      setSelectedImage({ ...selectedImage, width });
+                      setState('Waiting to save');
+                    }}
+                  />
+                </label>
+                <label className="media-field-label mt-3">
+                  Crop
+                  <select
+                    className="media-field"
+                    value={selectedImage.cropAspect ?? 'original'}
+                    onBlur={() => void saveImageMetadata(selectedImage)}
+                    onChange={(event) => {
+                      const cropAspect = event.target.value;
+                      editor?.chain().focus().updateAttributes('image', { cropAspect }).run();
+                      setSelectedImage({ ...selectedImage, cropAspect });
+                      setState('Waiting to save');
+                    }}
+                  >
+                    {['original', '16:9', '4:3', '1:1'].map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                  </select>
+                </label>
+                <fieldset className="mt-3">
+                  <legend className="media-field-label">Focal point</legend>
+                  {(['focalX', 'focalY'] as const).map((axis) => (
+                    <label className="mt-2 block text-xs text-muted" key={axis}>
+                      {axis === 'focalX' ? 'Horizontal' : 'Vertical'}
+                      <input
+                        className="w-full"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={selectedImage[axis] ?? 0.5}
+                        onPointerUp={() => void saveImageMetadata(selectedImage)}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          editor
+                            ?.chain()
+                            .focus()
+                            .updateAttributes('image', { [axis]: value })
+                            .run();
+                          setSelectedImage({ ...selectedImage, [axis]: value });
+                          setState('Waiting to save');
+                        }}
+                      />
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="admin-secondary justify-center"
+                    onClick={() =>
+                      id &&
+                      selectedImage.assetId &&
+                      call(`/api/v1/posts/${id}/media/${selectedImage.assetId}`, {
+                        method: 'POST',
+                        body: JSON.stringify({ placement: 'thumbnail' }),
+                      }).then(() => setState('Featured image set'))
+                    }
+                  >
+                    Set featured
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-secondary justify-center"
+                    onClick={() => editor?.chain().focus().deleteSelection().run()}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="admin-card editor-publish-card rounded-2xl p-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold uppercase tracking-widest text-muted">
                   Publication
                 </p>
-                <span
-                  className={`size-2 rounded-full ${state === 'Saved' || state.includes('Published') ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                />
+                <span className="editor-save-status" aria-live="polite">
+                  <span
+                    className={`size-1.5 rounded-full ${state === 'Saved' || state.includes('Published') ? 'bg-emerald-500' : state.includes('Offline') || state.includes('failed') ? 'bg-red-500' : 'bg-amber-500'}`}
+                  />
+                  {state}
+                </span>
               </div>
               <p className="mt-3 text-xs leading-relaxed text-muted">
                 {me.publishMode === 'review_required'
                   ? 'This article will be sent to an editor for approval.'
                   : 'You can publish this article directly.'}
               </p>
+              {preflightImageIssues > 0 && (
+                <p
+                  className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700"
+                  role="status"
+                >
+                  Preflight: {preflightImageIssues} image{preflightImageIssues === 1 ? '' : 's'}{' '}
+                  need alternative text before submission or publication.
+                </p>
+              )}
               {!id ? (
                 <button onClick={create} className="admin-primary mt-4 w-full justify-center">
                   <Icon name="save" /> Save draft
@@ -1305,6 +1468,12 @@ function Editor({
                     <Icon name="checkpoint" /> Checkpoint
                   </button>
                   <button
+                    disabled={preflightImageIssues > 0}
+                    title={
+                      preflightImageIssues > 0
+                        ? 'Add alternative text to every image first'
+                        : undefined
+                    }
                     onClick={() =>
                       call(
                         `/api/v1/posts/${id}/${me.publishMode === 'review_required' ? 'submit' : 'publish'}`,
@@ -1324,6 +1493,10 @@ function Editor({
                   </button>
                 </>
               )}
+              <p className="mt-3 border-t border-line pt-3 text-[.68rem] text-muted">
+                Revision {revision} · {wordCount} words · {Math.max(1, Math.ceil(wordCount / 220))}{' '}
+                min read
+              </p>
             </div>
             {id && (
               <TaxonomyPanel
@@ -1341,18 +1514,6 @@ function Editor({
                 onError={setError}
               />
             )}
-            <div className="admin-card rounded-2xl p-4">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted">Autosave</p>
-              <p className="mt-3 flex items-center gap-2 text-sm">
-                <span
-                  className={`size-2 rounded-full ${state === 'Saved' ? 'bg-emerald-500' : state === 'Offline' ? 'bg-red-500' : 'bg-amber-500'}`}
-                />
-                {state}
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                Revision {revision} · {wordCount} words
-              </p>
-            </div>
             {id && (
               <div className="admin-card rounded-2xl p-4">
                 <p className="text-xs font-bold uppercase tracking-widest text-muted">

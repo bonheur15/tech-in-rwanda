@@ -21,6 +21,8 @@
     "@astrojs/react": "^6.0.4",
     "@tailwindcss/vite": "^4.3.3",
     "@tiptap/extension-image": "^3.30.5",
+    "@tiptap/extension-link": "3.30.5",
+    "@tiptap/extension-placeholder": "3.30.5",
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
     "astro": "^7.2.9",

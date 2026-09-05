@@ -3,6 +3,7 @@ package editorial
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"rwandafreespace.com/blog/backend/internal/auth"
 	"rwandafreespace.com/blog/backend/internal/platform/database"
@@ -117,6 +118,32 @@ func TestDocumentValidationRejectsUnsafeRichContent(t *testing.T) {
 	for _, document := range []json.RawMessage{unsafeImage, badHeading, unsafeLink} {
 		if ValidateDocument(document) == nil {
 			t.Fatalf("unsafe document accepted: %s", document)
+		}
+	}
+}
+
+func TestDraftAllowsMissingAltButPublicationReportsImageIssue(t *testing.T) {
+	document := json.RawMessage(`{"type":"doc","content":[{"type":"image","attrs":{"assetId":"asset-1","src":"/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/large.jpg","alt":"","placement":"small","width":55,"cropAspect":"16:9","focalX":0.25,"focalY":0.75}}]}`)
+	if err := ValidateDocumentMode(document, DraftValidation); err != nil {
+		t.Fatalf("draft rejected: %v", err)
+	}
+	var issue *DocumentNotPublishableError
+	if err := ValidateDocumentMode(document, PublishValidation); !errors.As(err, &issue) || len(issue.Issues) != 1 || issue.Issues[0].AssetID != "asset-1" {
+		t.Fatalf("expected structured missing-alt issue, got %#v", err)
+	}
+}
+
+func TestImageWidthCropAndFocalBounds(t *testing.T) {
+	base := `/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/large.jpg`
+	for _, attrs := range []string{
+		`"placement":"left","width":65,"cropAspect":"original"`,
+		`"placement":"center","width":33,"cropAspect":"original"`,
+		`"placement":"center","width":50,"cropAspect":"2:1"`,
+		`"placement":"center","width":50,"cropAspect":"original","focalX":1.1`,
+	} {
+		document := json.RawMessage(`{"type":"doc","content":[{"type":"image","attrs":{"src":"` + base + `","alt":"described",` + attrs + `}}]}`)
+		if ValidateDocumentMode(document, DraftValidation) == nil {
+			t.Fatalf("invalid image accepted: %s", attrs)
 		}
 	}
 }

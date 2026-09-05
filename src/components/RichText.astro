@@ -11,12 +11,21 @@ const safeHref =
   typeof link?.attrs?.href === 'string' && /^(https?:|mailto:|\/|#)/.test(link.attrs.href)
     ? link.attrs.href
     : null;
-const placement = ['center', 'wide', 'full', 'left', 'right'].includes(node?.attrs?.placement)
+const placement = ['small', 'center', 'wide', 'full', 'left', 'right'].includes(
+  node?.attrs?.placement,
+)
   ? node.attrs.placement
   : 'center';
+const widthMax = placement === 'left' || placement === 'right' ? 60 : 100;
+const width = Math.max(30, Math.min(widthMax, Number(node?.attrs?.width) || 100));
+const crop = ['original', '16:9', '4:3', '1:1'].includes(node?.attrs?.cropAspect)
+  ? node.attrs.cropAspect
+  : 'original';
+const focalX = Math.max(0, Math.min(1, Number(node?.attrs?.focalX) || 0.5)) * 100;
+const focalY = Math.max(0, Math.min(1, Number(node?.attrs?.focalY) || 0.5)) * 100;
 ---
 {node?.type === 'text' ? (
-  link && safeHref ? <a href={safeHref} rel={safeHref.startsWith('http') ? 'noopener noreferrer' : undefined}>{text}</a> : marks.some((mark: any) => mark.type === 'bold') ? <strong>{text}</strong> : marks.some((mark: any) => mark.type === 'italic') ? <em>{text}</em> : marks.some((mark: any) => mark.type === 'code') ? <code>{text}</code> : text
+  link && safeHref ? <a href={safeHref} rel={safeHref.startsWith('http') ? 'noopener noreferrer' : undefined}>{text}</a> : marks.some((mark: any) => mark.type === 'bold') ? <strong>{text}</strong> : marks.some((mark: any) => mark.type === 'italic') ? <em>{text}</em> : marks.some((mark: any) => mark.type === 'strike') ? <s>{text}</s> : marks.some((mark: any) => mark.type === 'code') ? <code>{text}</code> : text
 ) : node?.type === 'paragraph' ? <p>{children.map((child: any) => <Astro.self node={child}/>)}</p>
   : node?.type === 'heading' && node?.attrs?.level === 3 ? <h3>{children.map((child: any) => <Astro.self node={child}/>)}</h3>
   : node?.type === 'heading' ? <h2>{children.map((child: any) => <Astro.self node={child}/>)}</h2>
@@ -26,5 +35,5 @@ const placement = ['center', 'wide', 'full', 'left', 'right'].includes(node?.att
   : node?.type === 'listItem' ? <li>{children.map((child: any) => <Astro.self node={child}/>)}</li>
   : node?.type === 'codeBlock' ? <pre><code>{children.map((child: any) => child.text ?? '')}</code></pre>
   : node?.type === 'horizontalRule' ? <hr/>
-  : node?.type === 'image' ? <figure class:list={[placement === 'wide' && 'md:-mx-24', placement === 'full' && 'md:-mx-48', placement === 'left' && 'md:float-left md:mr-8 md:w-1/2', placement === 'right' && 'md:float-right md:ml-8 md:w-1/2']}><img src={node.attrs?.src} alt={node.attrs?.alt ?? ''}/>{node.attrs?.caption && <figcaption>{node.attrs.caption}{node.attrs?.credit && ` · ${node.attrs.credit}`}</figcaption>}</figure>
+  : node?.type === 'image' ? <figure class:list={['rich-image',`rich-image-${placement}`]} style={`--image-width:${width}%;--focal-x:${focalX}%;--focal-y:${focalY}%`}><div class:list={['rich-image-crop',`crop-${crop.replace(':','-')}`]}><img src={node.attrs?.src} alt={node.attrs?.alt ?? ''}/></div>{(node.attrs?.caption || node.attrs?.credit) && <figcaption>{node.attrs?.caption}{node.attrs?.caption && node.attrs?.credit && ' · '}{node.attrs?.credit}</figcaption>}</figure>
   : children.map((child: any) => <Astro.self node={child}/>)}

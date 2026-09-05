@@ -2,6 +2,10 @@
 export interface APIError { code: string; message: string; requestId?: string; details?: unknown }
 export interface Envelope<T> { data: T; meta: { requestId: string; nextCursor?: string } }
 export interface Post { id:string; ownerId:string; title:string; slug:string; excerpt:string; state:string; content:unknown; revision:number; publishedVersionId:string|null; sourcePostId:string|null; updatedAt:string; publishedAt:string|null }
+export type ImagePlacement="small"|"center"|"wide"|"full"|"left"|"right";
+export type CropAspect="original"|"16:9"|"4:3"|"1:1";
+export interface MediaAsset { id:string; hash:string; src:string; width:number; height:number; bytes:number; alt:string; caption:string; credit:string; cropAspect:CropAspect; focalX:number|null; focalY:number|null; status:string }
+export interface ImageNodeAttributes { assetId:string; src:string; alt:string; caption:string; credit:string; placement:ImagePlacement; width:number; cropAspect:CropAspect; focalX:number; focalY:number }
 export interface Session { id:string; device:string; ipAddress:string; createdAt:string; lastActivityAt:string; expiresAt:string }
 export interface RequestOptions { baseUrl?:string; signal?:AbortSignal; timeoutMs?:number; ttlMs?:number; fetch?:typeof fetch; idempotencyKey?:string; csrfToken?:string; forceRefresh?:boolean; returnEnvelope?:boolean }
 export class APIRequestError extends Error { constructor(message:string,public status=0,public code="request_failed",public requestId?:string){super(message);this.name="APIRequestError"} }
@@ -34,13 +38,15 @@ export const api={
  restore:(id:string,version:string,o?:RequestOptions)=>request<Post>("POST","/api/v1/posts/"+id+"/restore/"+version,{},o,["post:"+id]),
  updateMetadata:(id:string,categoryId:string,tagIds:string[],o?:RequestOptions)=>request("PATCH","/api/v1/posts/"+id+"/metadata",{categoryId,tagIds},o,["post:"+id,"archive"]),
  attachMedia:(id:string,asset:string,placement:string,o?:RequestOptions)=>request("POST","/api/v1/posts/"+id+"/media/"+asset,{placement},o,["post:"+id,"media"]),
+ unsetFeaturedImage:(id:string,o?:RequestOptions)=>request("DELETE","/api/v1/posts/"+id+"/featured-image",{},o,["post:"+id,"media"]),
  publish:(id:string,o?:RequestOptions)=>request<{versionId:string}>("POST","/api/v1/posts/"+id+"/publish",{},o,["post:"+id,"archive"]),
  fork:(id:string,o?:RequestOptions)=>request<Post>("POST","/api/v1/posts/"+id+"/fork",{},o,["archive"]),
  sessions:(kind:"staff"|"reader"="staff",o?:RequestOptions)=>request<Session[]>("GET","/api/v1/sessions?kind="+kind,undefined,{...o,ttlMs:0}),
  sessionsPage:(kind:"staff"|"reader"="staff",cursor?:string,o?:RequestOptions)=>request<Envelope<Session[]>>("GET","/api/v1/sessions?kind="+kind+(cursor?"&cursor="+encodeURIComponent(cursor):""),undefined,{...o,ttlMs:0,returnEnvelope:true}),
  revokeSession:(id:string,o?:RequestOptions)=>request("DELETE","/api/v1/sessions/"+id,{},o,["sessions"]),
  revokeOtherSessions:(kind:"staff"|"reader"="staff",o?:RequestOptions)=>request("DELETE","/api/v1/sessions?kind="+kind,{},o,["sessions"]),
- upload:(data:FormData,o?:RequestOptions)=>request<{id:string;src:string}>("POST","/api/v1/media",data,o,["media"]),
+ upload:(data:FormData,o?:RequestOptions)=>request<MediaAsset>("POST","/api/v1/media",data,o,["media"]),
+ updateMedia:(id:string,input:Pick<MediaAsset,"alt"|"caption"|"credit"|"cropAspect"|"focalX"|"focalY">,o?:RequestOptions)=>request<MediaAsset>("PATCH","/api/v1/media/"+id,input,o,["media"]),
  bookmarks:(o?:RequestOptions)=>request<Post[]>("GET","/api/v1/bookmarks",undefined,{...o,ttlMs:0},["bookmarks"]),
  bookmark:(id:string,o?:RequestOptions)=>request("POST","/api/v1/articles/"+id+"/bookmarks",{},o,["bookmarks"]),
  unbookmark:(id:string,o?:RequestOptions)=>request("DELETE","/api/v1/articles/"+id+"/bookmarks",{},o,["bookmarks"]),

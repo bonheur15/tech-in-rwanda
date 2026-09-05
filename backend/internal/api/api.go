@@ -70,6 +70,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/posts/{id}/publish", a.withMutation(a.publish))
 	mux.HandleFunc("POST /api/v1/posts/{id}/fork", a.withMutation(a.fork))
 	mux.HandleFunc("POST /api/v1/posts/{id}/media/{asset}", a.withMutation(a.attachMedia))
+	mux.HandleFunc("DELETE /api/v1/posts/{id}/featured-image", a.withMutation(a.unsetFeaturedImage))
 	mux.HandleFunc("GET /api/v1/posts/{id}/versions", a.withActor(a.versions))
 	mux.HandleFunc("POST /api/v1/posts/{id}/restore/{version}", a.withMutation(a.restoreVersion))
 	mux.HandleFunc("DELETE /api/v1/posts/{id}", a.withMutation(a.deletePost))
@@ -98,6 +99,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/audit", a.withActor(a.adminAudit))
 	mux.HandleFunc("PATCH /api/v1/account/profile", a.withMutation(a.updateProfile))
 	mux.HandleFunc("POST /api/v1/media", a.withMutation(a.uploadMedia))
+	mux.HandleFunc("PATCH /api/v1/media/{id}", a.withMutation(a.updateMedia))
 	mux.HandleFunc("GET /media/{hash}/{file}", a.serveMedia)
 	return mux
 }
@@ -736,6 +738,11 @@ func respond(w http.ResponseWriter, r *http.Request, data any, err error, status
 		httpx.JSON(w, status, data)
 		return
 	}
+	var notPublishable *editorial.DocumentNotPublishableError
+	if errors.As(err, &notPublishable) {
+		httpx.FailureDetails(w, r, http.StatusUnprocessableEntity, "document_not_publishable", "Resolve the document issues before submitting or publishing", map[string]any{"issues": notPublishable.Issues})
+		return
+	}
 	status, code, message := publicError(err)
 	httpx.Failure(w, r, status, code, message)
 }
@@ -757,8 +764,8 @@ func publicError(err error) (int, string, string) {
 		"too many requests", "missing turnstile token", "turnstile verification failed",
 		"document is too large", "content must be a TipTap document", "document structure is too complex",
 		"unsupported content node", "only H2 and H3 headings are supported",
-		"images require a managed media URL and alternative text", "unsupported image placement",
-		"unsupported text formatting", "unsupported link URL",
+		"images require a managed media URL", "unsupported image placement", "invalid image width",
+		"unsupported crop aspect", "invalid focal point", "unsupported text formatting", "unsupported link URL",
 	}
 	for _, safe := range safeValidation {
 		if message == safe {
@@ -1035,10 +1042,6 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		return
 	}
 	alt := strings.TrimSpace(r.FormValue("alt"))
-	if alt == "" {
-		httpx.Failure(w, r, 400, "alt_required", "Alternative text is required")
-		return
-	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		httpx.Failure(w, r, 400, "file_required", "JPEG or PNG file required")
@@ -1115,7 +1118,15 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		}
 		focalY = value
 	}
-	_, err = a.DB.ExecContext(r.Context(), "INSERT INTO media_assets(id,owner_id,content_hash,mime_type,width,height,bytes,alt_text,caption,credit,focal_x,focal_y,created_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(content_hash) DO NOTHING", id, x.IdentityID, hash, mime, cfg.Width, cfg.Height, len(body), alt, strings.TrimSpace(r.FormValue("caption")), strings.TrimSpace(r.FormValue("credit")), focalX, focalY, now)
+	crop := strings.TrimSpace(r.FormValue("cropAspect"))
+	if crop == "" {
+		crop = "original"
+	}
+	if !map[string]bool{"original": true, "16:9": true, "4:3": true, "1:1": true}[crop] {
+		httpx.Failure(w, r, 400, "invalid_crop_aspect", "Choose a supported crop aspect")
+		return
+	}
+	_, err = a.DB.ExecContext(r.Context(), "INSERT INTO media_assets(id,owner_id,content_hash,mime_type,width,height,bytes,alt_text,caption,credit,focal_x,focal_y,crop_aspect,created_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(content_hash) DO NOTHING", id, x.IdentityID, hash, mime, cfg.Width, cfg.Height, len(body), alt, strings.TrimSpace(r.FormValue("caption")), strings.TrimSpace(r.FormValue("credit")), focalX, focalY, crop, now)
 	if err != nil {
 		respond(w, r, nil, err, 0)
 		return
@@ -1126,7 +1137,42 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) 
 		httpx.Failure(w, r, 409, "private_duplicate", "This image already exists in another private media library")
 		return
 	}
-	httpx.JSON(w, 201, map[string]any{"id": actual, "hash": hash, "src": "/media/" + hash + "/large.jpg", "width": cfg.Width, "height": cfg.Height, "alt": alt})
+	var caption, credit, actualAlt, actualCrop string
+	var actualWidth, actualHeight, bytes int
+	var actualFX, actualFY *float64
+	_ = a.DB.QueryRowContext(r.Context(), "SELECT width,height,bytes,alt_text,caption,credit,crop_aspect,focal_x,focal_y FROM media_assets WHERE id=?", actual).Scan(&actualWidth, &actualHeight, &bytes, &actualAlt, &caption, &credit, &actualCrop, &actualFX, &actualFY)
+	httpx.JSON(w, 201, map[string]any{"id": actual, "hash": hash, "src": "/media/" + hash + "/large.jpg", "width": actualWidth, "height": actualHeight, "bytes": bytes, "alt": actualAlt, "caption": caption, "credit": credit, "cropAspect": actualCrop, "focalX": actualFX, "focalY": actualFY, "status": actualStatus})
+}
+
+func (a *API) updateMedia(w http.ResponseWriter, r *http.Request, x auth.Actor) {
+	if x.Kind != "staff" {
+		respond(w, r, nil, auth.ErrUnauthorized, 0)
+		return
+	}
+	var in struct {
+		Alt, Caption, Credit, CropAspect string
+		FocalX, FocalY                   *float64
+	}
+	if decode(r, &in) != nil || !map[string]bool{"original": true, "16:9": true, "4:3": true, "1:1": true}[in.CropAspect] || (in.FocalX != nil && (*in.FocalX < 0 || *in.FocalX > 1)) || (in.FocalY != nil && (*in.FocalY < 0 || *in.FocalY > 1)) {
+		httpx.Failure(w, r, 400, "invalid_media_metadata", "Check crop and focal point values")
+		return
+	}
+	var owner, status string
+	if err := a.DB.QueryRowContext(r.Context(), "SELECT owner_id,status FROM media_assets WHERE id=?", r.PathValue("id")).Scan(&owner, &status); err != nil || (owner != x.IdentityID && x.Role != "superadmin") {
+		respond(w, r, nil, auth.ErrUnauthorized, 0)
+		return
+	}
+	_, err := a.DB.ExecContext(r.Context(), "UPDATE media_assets SET alt_text=?,caption=?,credit=?,crop_aspect=?,focal_x=?,focal_y=? WHERE id=?", strings.TrimSpace(in.Alt), strings.TrimSpace(in.Caption), strings.TrimSpace(in.Credit), in.CropAspect, in.FocalX, in.FocalY, r.PathValue("id"))
+	if err != nil {
+		respond(w, r, nil, err, 0)
+		return
+	}
+	var hash string
+	var width, height, bytes int
+	var alt, caption, credit, crop string
+	var fx, fy *float64
+	err = a.DB.QueryRowContext(r.Context(), "SELECT content_hash,width,height,bytes,alt_text,caption,credit,crop_aspect,focal_x,focal_y FROM media_assets WHERE id=?", r.PathValue("id")).Scan(&hash, &width, &height, &bytes, &alt, &caption, &credit, &crop, &fx, &fy)
+	respond(w, r, map[string]any{"id": r.PathValue("id"), "hash": hash, "src": "/media/" + hash + "/large.jpg", "width": width, "height": height, "bytes": bytes, "alt": alt, "caption": caption, "credit": credit, "cropAspect": crop, "focalX": fx, "focalY": fy, "status": status}, err, 200)
 }
 func (a *API) serveMedia(w http.ResponseWriter, r *http.Request) {
 	hash, size := r.PathValue("hash"), strings.TrimSuffix(r.PathValue("file"), ".jpg")

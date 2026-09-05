@@ -33,6 +33,24 @@ type Post struct {
 	PublishedAt        *string         `json:"publishedAt"`
 }
 
+type ValidationMode int
+
+const (
+	DraftValidation ValidationMode = iota
+	PublishValidation
+)
+
+type DocumentIssue struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Block   int    `json:"block"`
+	AssetID string `json:"assetId,omitempty"`
+}
+
+type DocumentNotPublishableError struct{ Issues []DocumentIssue }
+
+func (e *DocumentNotPublishableError) Error() string { return "document is not publishable" }
+
 var slugClean = regexp.MustCompile(`[^a-z0-9]+`)
 
 func (s *Service) now() time.Time {
@@ -48,7 +66,9 @@ func Slug(v string) string {
 	}
 	return v
 }
-func ValidateDocument(raw json.RawMessage) error {
+func ValidateDocument(raw json.RawMessage) error { return ValidateDocumentMode(raw, PublishValidation) }
+
+func ValidateDocumentMode(raw json.RawMessage, mode ValidationMode) error {
 	if len(raw) > 2<<20 {
 		return errors.New("document is too large")
 	}
@@ -70,7 +90,8 @@ func ValidateDocument(raw json.RawMessage) error {
 		return errors.New("content must be a TipTap document")
 	}
 	allowed := map[string]bool{"paragraph": true, "heading": true, "bulletList": true, "orderedList": true, "listItem": true, "blockquote": true, "codeBlock": true, "horizontalRule": true, "image": true, "text": true}
-	count := 0
+	count, block := 0, -1
+	issues := []DocumentIssue{}
 	var validate func(json.RawMessage, int) error
 	validate = func(body json.RawMessage, depth int) error {
 		count++
@@ -93,11 +114,28 @@ func ValidateDocument(raw json.RawMessage) error {
 			src, _ := current.Attrs["src"].(string)
 			alt, _ := current.Attrs["alt"].(string)
 			placement, _ := current.Attrs["placement"].(string)
-			if !regexp.MustCompile(`^/media/[a-f0-9]{64}/(original|large|medium|small)\.jpg$`).MatchString(src) || strings.TrimSpace(alt) == "" {
-				return errors.New("images require a managed media URL and alternative text")
+			assetID, _ := current.Attrs["assetId"].(string)
+			if !regexp.MustCompile(`^/media/[a-f0-9]{64}/(original|large|medium|small)\.jpg$`).MatchString(src) {
+				return errors.New("images require a managed media URL")
 			}
-			if placement != "" && !map[string]bool{"center": true, "wide": true, "full": true, "left": true, "right": true}[placement] {
+			if placement != "" && !map[string]bool{"small": true, "center": true, "wide": true, "full": true, "left": true, "right": true}[placement] {
 				return errors.New("unsupported image placement")
+			}
+			width, ok := current.Attrs["width"].(float64)
+			if ok && (width < 30 || width > 100 || (placement == "left" || placement == "right") && width > 60 || int(width)%5 != 0) {
+				return errors.New("invalid image width")
+			}
+			crop, _ := current.Attrs["cropAspect"].(string)
+			if crop != "" && !map[string]bool{"original": true, "16:9": true, "4:3": true, "1:1": true}[crop] {
+				return errors.New("unsupported crop aspect")
+			}
+			for _, key := range []string{"focalX", "focalY"} {
+				if value, present := current.Attrs[key].(float64); present && (value < 0 || value > 1) {
+					return errors.New("invalid focal point")
+				}
+			}
+			if mode == PublishValidation && strings.TrimSpace(alt) == "" {
+				issues = append(issues, DocumentIssue{Code: "image_alt_required", Message: "Add alternative text before publishing", Block: block, AssetID: assetID})
 			}
 		}
 		for _, m := range current.Marks {
@@ -119,9 +157,13 @@ func ValidateDocument(raw json.RawMessage) error {
 		return nil
 	}
 	for _, child := range root.Content {
+		block++
 		if err := validate(child, 1); err != nil {
 			return err
 		}
+	}
+	if len(issues) > 0 {
+		return &DocumentNotPublishableError{Issues: issues}
 	}
 	return nil
 }
@@ -129,7 +171,7 @@ func (s *Service) Create(ctx context.Context, a auth.Actor, title, excerpt strin
 	if a.Kind != "staff" || a.Status != "active" {
 		return Post{}, auth.ErrUnauthorized
 	}
-	if err := ValidateDocument(content); err != nil {
+	if err := ValidateDocumentMode(content, DraftValidation); err != nil {
 		return Post{}, err
 	}
 	id := uuid.NewString()
@@ -165,7 +207,7 @@ func (s *Service) GetDraft(ctx context.Context, a auth.Actor, id string) (Post, 
 	return p, nil
 }
 func (s *Service) Save(ctx context.Context, a auth.Actor, id, title, excerpt string, content json.RawMessage, _ int) (Post, error) {
-	if err := ValidateDocument(content); err != nil {
+	if err := ValidateDocumentMode(content, DraftValidation); err != nil {
 		return Post{}, err
 	}
 	p, err := s.GetDraft(ctx, a, id)
@@ -192,6 +234,9 @@ func (s *Service) Save(ctx context.Context, a auth.Actor, id, title, excerpt str
 	if _, err = tx.ExecContext(ctx, "UPDATE posts SET title=?,excerpt=?,updated_at=?,state=CASE WHEN state='in_review' THEN 'draft' ELSE state END WHERE id=?", title, excerpt, now, id); err != nil {
 		return Post{}, err
 	}
+	if err = reconcileArticleMedia(ctx, tx, id, content); err != nil {
+		return Post{}, err
+	}
 	tx.ExecContext(ctx, "UPDATE review_decisions SET status='cancelled',decided_at=? WHERE post_id=? AND status='pending'", now, id)
 	if err = tx.Commit(); err != nil {
 		return Post{}, err
@@ -209,6 +254,65 @@ func (s *Service) Checkpoint(ctx context.Context, a auth.Actor, id, reason strin
 	}
 	defer tx.Rollback()
 	return checkpoint(ctx, tx, a, p, reason, s.now())
+}
+
+func reconcileArticleMedia(ctx context.Context, tx *sql.Tx, postID string, raw json.RawMessage) error {
+	var root struct {
+		Content []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return err
+	}
+	refs := map[string]map[string]bool{}
+	var walk func(json.RawMessage)
+	walk = func(raw json.RawMessage) {
+		var node struct {
+			Type    string            `json:"type"`
+			Attrs   map[string]any    `json:"attrs"`
+			Content []json.RawMessage `json:"content"`
+		}
+		if json.Unmarshal(raw, &node) != nil {
+			return
+		}
+		if node.Type == "image" {
+			id, _ := node.Attrs["assetId"].(string)
+			placement, _ := node.Attrs["placement"].(string)
+			if id == "" {
+				if src, _ := node.Attrs["src"].(string); src != "" {
+					parts := strings.Split(src, "/")
+					if len(parts) > 2 {
+						_ = tx.QueryRowContext(ctx, "SELECT id FROM media_assets WHERE content_hash=?", parts[2]).Scan(&id)
+					}
+				}
+			}
+			if placement == "" {
+				placement = "center"
+			}
+			if id != "" {
+				if refs[id] == nil {
+					refs[id] = map[string]bool{}
+				}
+				refs[id][placement] = true
+			}
+		}
+		for _, child := range node.Content {
+			walk(child)
+		}
+	}
+	for _, child := range root.Content {
+		walk(child)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM article_media WHERE post_id=? AND placement<>'thumbnail'", postID); err != nil {
+		return err
+	}
+	for assetID, placements := range refs {
+		for placement := range placements {
+			if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO article_media(post_id,asset_id,placement) VALUES(?,?,?)", postID, assetID, placement); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 func checkpoint(ctx context.Context, tx *sql.Tx, a auth.Actor, p Post, reason string, now time.Time) (string, error) {
 	var number int
@@ -229,6 +333,13 @@ func (s *Service) Submit(ctx context.Context, a auth.Actor, id string) (string, 
 	if a.PublishMode != "review_required" {
 		return "", errors.New("account does not require review")
 	}
+	p, err := s.GetDraft(ctx, a, id)
+	if err != nil {
+		return "", err
+	}
+	if err = ValidateDocumentMode(p.Content, PublishValidation); err != nil {
+		return "", err
+	}
 	version, err := s.Checkpoint(ctx, a, id, "review submission")
 	if err != nil {
 		return "", err
@@ -241,6 +352,13 @@ func (s *Service) Submit(ctx context.Context, a auth.Actor, id string) (string, 
 func (s *Service) Publish(ctx context.Context, a auth.Actor, id string) (string, error) {
 	if a.Role != "superadmin" && a.PublishMode != "direct_publish" {
 		return "", auth.ErrUnauthorized
+	}
+	p, err := s.GetDraft(ctx, a, id)
+	if err != nil {
+		return "", err
+	}
+	if err = ValidateDocumentMode(p.Content, PublishValidation); err != nil {
+		return "", err
 	}
 	version, err := s.Checkpoint(ctx, a, id, "publication")
 	if err != nil {
